@@ -315,29 +315,52 @@ for ri in range(6,len(rows_bm)):
                 metas.setdefault(nome,{}).setdefault('ALL',{}).setdefault(ano,{})
                 metas[nome]['ALL'][ano][m+1]=round(metas[nome]['ALL'][ano].get(m+1,0)+v,2)
 
-# Volume Real (Venda) — tabela 1: linhas 4-6 da aba (idx 3-5), colunas C+ (idx 2+)
-rows_vr=list(wb2['VOLUME_REAL'].iter_rows(min_row=1,max_row=14,values_only=True))
+# Volume Real (Venda) e Volume Puxado — aba VOLUME_REAL
+# Localiza as linhas de cada base dinamicamente (ignora cabeçalhos com texto como 'JANEIRO')
+rows_vr=list(wb2['VOLUME_REAL'].iter_rows(min_row=1,max_row=30,values_only=True))
+
+def sf_cell(v):
+    try: return float(v or 0)
+    except: return 0.0
+
+# Encontra índices de cada base (pode aparecer 2x: tabela venda + tabela puxado)
+idx_pm,idx_lp,idx_ab=[],[],[]
+for i,row in enumerate(rows_vr):
+    if not row or len(row)<3: continue
+    bv=str(row[0] or '').upper().strip()
+    if not bv: continue
+    if 'PARA DE MINAS' in bv or 'COBEB PM' in bv: idx_pm.append(i)
+    elif 'LAGOA' in bv or 'COBEB LP' in bv:       idx_lp.append(i)
+    elif 'RDC' in bv or 'ABAET' in bv:            idx_ab.append(i)
+print(f"   VOLUME_REAL idx: PM={idx_pm}, LP={idx_lp}, AB={idx_ab}")
+
+# Tabela 1 — Volume Venda (primeira ocorrência de cada base)
 vol_real={'ALL':{}}
-for ri,base in [(3,'COBEB PM'),(4,'COBEB LP'),(5,'RDC ABAETÉ')]:
+for base,idxs in [('COBEB PM',idx_pm),('COBEB LP',idx_lp),('RDC ABAETÉ',idx_ab)]:
+    if not idxs: continue
     vol_real[base]={}
+    row=rows_vr[idxs[0]]
     for m in range(12):
-        v=float(rows_vr[ri][2+m] or 0)
+        v=sf_cell(row[2+m] if 2+m<len(row) else None)
         if v:
             for ano in [2025,2026]:
                 vol_real[base].setdefault(ano,{})[m+1]=v
                 vol_real['ALL'].setdefault(ano,{})[m+1]=vol_real['ALL'].get(ano,{}).get(m+1,0)+v
 
-# Volume Puxado — tabela 2: linhas 11-13 da aba (idx 10-12), mesmo layout
+# Tabela 2 — Volume Puxado (segunda ocorrência de cada base)
 vol_puxado={'ALL':{}}
-for ri,base in [(10,'COBEB PM'),(11,'COBEB LP'),(12,'RDC ABAETÉ')]:
+for base,idxs in [('COBEB PM',idx_pm),('COBEB LP',idx_lp),('RDC ABAETÉ',idx_ab)]:
+    if len(idxs)<2: print(f"   ⚠️  {base}: só 1 tabela encontrada, volPuxado não preenchido"); continue
     vol_puxado[base]={}
+    row=rows_vr[idxs[1]]
     for m in range(12):
-        v=float(rows_vr[ri][2+m] or 0)
+        v=sf_cell(row[2+m] if 2+m<len(row) else None)
         if v:
             for ano in [2025,2026]:
                 vol_puxado[base].setdefault(ano,{})[m+1]=v
                 vol_puxado['ALL'].setdefault(ano,{})[m+1]=vol_puxado['ALL'].get(ano,{}).get(m+1,0)+v
-print(f"   volPuxado carregado: {sum(len(v) for v in vol_puxado.items() if isinstance(v,dict))} entradas")
+print(f"   volReal LP Jan/26: {vol_real.get('COBEB LP',{}).get(2026,{}).get(1,'—')}")
+print(f"   volPuxado LP Jan/26: {vol_puxado.get('COBEB LP',{}).get(2026,{}).get(1,'—')}")
 
 # WQI Meta
 wqiMeta={}
