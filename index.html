@@ -307,15 +307,26 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="kpi-row" id="kpi-rhl"></div>
     <div class="panel">
       <div class="panel-head">
-        <div><div class="panel-title">R$/HL por Linha</div><div class="panel-sub">Prejuízo financeiro ÷ volume entregue no mês</div></div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+            <div>
+              <div class="panel-title" style="margin:0">R$/HL por Linha</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px">
+                <span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.04em">÷ VOLUME ENTREGUE</span>
+                <span style="color:var(--muted)">Prejuízo financeiro dividido pelo volume entregue no período</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
           <select id="sel-dept-rhl" onchange="renderRHL()">
             <option value="ALL">Todos os depart.</option>
             <option value="Entrega">Entrega</option>
             <option value="Armazém">Armazém</option>
             <option value="Puxada">Puxada</option>
             <option value="Diferença de AG">Diferença de AG</option>
-          <option value="Erro de Programação">Erro de Programação</option>
+            <option value="Erro de Programação">Erro de Programação</option>
           </select>
           <div class="ms-wrap" id="ms-linha-rhl"><button class="ms-btn">Todas as linhas</button><div class="ms-dropdown"></div></div>
         </div>
@@ -323,8 +334,54 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
       <div class="panel-body no-pad"><div class="tw" id="t-rhl"></div></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">Evolução R$/HL — Linha selecionada</div></div>
+      <div class="panel-head">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+          <div>
+            <div class="panel-title" style="margin:0">Evolução R$/HL — Linha selecionada</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Variação mês a mês no período selecionado</div>
+          </div>
+        </div>
+      </div>
       <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-rhl-linha"></canvas></div></div>
+    </div>
+
+    <!-- ── R$/HL PUXADO ── -->
+    <div class="kpi-row" id="kpi-rhl-p" style="margin-top:8px"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:4px;height:22px;background:#22c55e;border-radius:2px;display:inline-block;flex-shrink:0"></span>
+            <div>
+              <div class="panel-title" style="margin:0">R$/HL Puxado por Linha</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px">
+                <span style="background:rgba(34,197,94,.15);color:#22c55e;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.04em">÷ VOLUME PUXADO</span>
+                <span style="color:var(--muted)">Mesmo prejuízo dividido pelo volume puxado (comprado da cervejaria)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-body no-pad"><div class="tw" id="t-rhl-p"></div></div>
+    </div>
+
+    <!-- ── COMPARATIVO ── -->
+    <div class="panel">
+      <div class="panel-head">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:4px;height:22px;background:#a78bfa;border-radius:2px;display:inline-block;flex-shrink:0"></span>
+          <div>
+            <div class="panel-title" style="margin:0">Comparativo R$/HL — Entregue vs Puxado</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:8px">
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:3px;background:#f59e0b;border-radius:2px;display:inline-block"></span><span style="color:#f59e0b;font-size:10px;font-weight:700">ENTREGUE</span></span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:3px;background:#22c55e;border-radius:2px;display:inline-block"></span><span style="color:#22c55e;font-size:10px;font-weight:700">PUXADO</span></span>
+              <span style="color:var(--muted)">Linha a linha, mês a mês</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-body no-pad"><div class="tw" id="t-rhl-comp"></div></div>
     </div>
   </div>
 
@@ -652,7 +709,7 @@ const S = {
   prodUnit: 'BRL',
   data: {}, metas: {}, vol: {},
   rawProd: [], rawDiario: [],
-  wqiMensal: {}, wqiDiario: {}, wqiMeta: {}, volEntregue: {},
+  wqiMensal: {}, wqiDiario: {}, wqiMeta: {}, volEntregue: {}, volPuxado: {},
   lookup: {},
 };
 let CH = {};
@@ -1111,13 +1168,39 @@ function parseLookup(wb) {
 }
 
 function parseAll(wb) {
-  S.data={}; S.metas={}; S.vol={}; S.rawProd=[]; S.rawDiario=[]; S.wqiMeta={}; S.wqiMensal={}; S.wqiDiario={}; S.lookup={};
+  S.data={}; S.metas={}; S.vol={}; S.volPuxado={}; S.rawProd=[]; S.rawDiario=[]; S.wqiMeta={}; S.wqiMensal={}; S.wqiDiario={}; S.lookup={};
   parseLookup(wb);
   parse0317mensal(wb);
   parse0317diaria(wb);
   parse032801(wb);
   parseMetas(wb);
   parseVol(wb);
+  parseVolPuxado(wb);
+}
+
+function parseVolPuxado(wb) {
+  // VOLUME_REAL: segunda tabela (VOLUME PUXADA) — linhas 11-13 (idx 10-12), mesmo layout de colunas
+  const sn = wb.SheetNames.find(n => n === 'VOLUME_REAL');
+  if (!sn) return;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null, raw:true});
+  if (rows.length < 13) return;
+  const MAP = [[10,'COBEB PM'],[11,'COBEB LP'],[12,'RDC ABAETÉ']];
+  MAP.forEach(([ri,base]) => {
+    const row = rows[ri];
+    if (!row) return;
+    for (let m=0; m<12; m++) {
+      const v = flt(row[2+m]);
+      if (v) { [2025,2026].forEach(y => { S.volPuxado[base]=S.volPuxado[base]||{}; S.volPuxado[base][y]=S.volPuxado[base][y]||{}; S.volPuxado[base][y][m+1]=v; }); }
+    }
+  });
+  S.volPuxado['ALL'] = {};
+  [2025,2026].forEach(y => {
+    S.volPuxado['ALL'][y]={};
+    for(let m=1;m<=12;m++) {
+      S.volPuxado['ALL'][y][m] = BASES_LIST.reduce((s,b)=>s+(S.volPuxado[b]?.[y]?.[m]||0),0);
+    }
+  });
+  console.log(`VolPuxado PM Jan/26: ${S.volPuxado['COBEB PM']?.[2026]?.[1]}`);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1152,6 +1235,21 @@ function getRHL(nome, base, ano, mes) {
 function getMetaRHL(nome, base, ano, mes) {
   const meta = getMeta(nome, base, ano, mes);
   const vol  = getVolEntregue(base, ano, mes) || getVol(base, ano, mes);
+  return vol > 0 ? meta / vol : 0;
+}
+function getVolPuxado(base, ano, mes) {
+  if (base === 'ALL') return BASES_LIST.reduce((s,b) => s + (S.volPuxado?.[b]?.[ano]?.[mes] || 0), 0);
+  return S.volPuxado?.[base]?.[ano]?.[mes] || 0;
+}
+function sumVolPuxado(base,ano,ateM){ let s=0; getMs(ateM).forEach(m=>s+=getVolPuxado(base,ano,m)); return s; }
+function getRHLPuxado(nome, base, ano, mes) {
+  const brl = getBRL(nome, base, ano, mes);
+  const vol = getVolPuxado(base, ano, mes);
+  return vol > 0 ? brl / vol : 0;
+}
+function getMetaRHLPuxado(nome, base, ano, mes) {
+  const meta = getMeta(nome, base, ano, mes);
+  const vol = getVolPuxado(base, ano, mes);
   return vol > 0 ? meta / vol : 0;
 }
 
@@ -1460,21 +1558,81 @@ function renderHLChart() {
 // ═══════════════════════════════════════════════════════
 // VISÃO R$/HL
 // ═══════════════════════════════════════════════════════
+function sumBRL2(linhas,base,ano,mesAte){let s=0;linhas.forEach(n=>s+=sumBRL(n,base,ano,mesAte));return s;}
+
+// Renderiza uma tabela R$/HL genérica: getV(nome,base,ano,mes) e getVM(nome,base,ano,mes) e getVolFn(base,ano,mes)
+function renderRHLTable(containerId, linhas, base, ano, mesAte, getV, getVM, getVolAcum) {
+  // Cores baseadas na meta: verde=abaixo da meta(bom), vermelho=acima(ruim)
+  function cellColor(v, vm) {
+    if (!v) return null;
+    if (vm <= 0) return {bg:'rgba(45,126,247,.12)',clr:'#7ab4ff'}; // sem meta = azul neutro
+    return v > vm
+      ? {bg:'rgba(239,68,68,.22)',clr:'#ff6b6b'}   // acima da meta = RUIM = vermelho
+      : {bg:'rgba(34,197,94,.18)',clr:'#4ade80'};  // abaixo da meta = BOM = verde
+  }
+  let html=`<table><thead><tr>
+    <th class="left" style="min-width:160px">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">
+        <span style="width:3px;height:14px;background:var(--accent);border-radius:2px;display:inline-block"></span>Linha
+      </span>
+    </th>
+    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Acumulado</span></th>
+    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Meta</span></th>
+    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">vs Meta</span></th>
+    ${getMs(mesAte).map(m=>`<th><span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--muted)">${MESES[m-1].slice(0,3).toUpperCase()}</span></th>`).join('')}
+  </tr></thead><tbody>`;
+  let lastDept='';
+  linhas.forEach(nome=>{
+    const def=NOME_TO_DEF[nome];
+    const dept=def?.dept||'';
+    if (dept!==lastDept) {
+      lastDept=dept;
+      const deptClr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+      html+=`<tr><td colspan="${4+getMs(mesAte).length}" style="padding:10px 12px 4px;background:var(--s1)">
+        <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr};display:inline-flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${deptClr};display:inline-block"></span>${dept}
+        </span>
+      </td></tr>`;
+    }
+    const volAcum=getVolAcum(base,ano,mesAte);
+    const brlAcum=sumBRL(nome,base,ano,mesAte);
+    const metaAcum=sumMeta(nome,base,ano,mesAte);
+    const acumRHL=volAcum>0?brlAcum/volAcum:0;
+    const metaRHL=volAcum>0?metaAcum/volAcum:0;
+    const pctMeta=metaRHL>0?acumRHL/metaRHL:0;
+    const acumCC=cellColor(acumRHL,metaRHL);
+    const clrVsMeta=pctMeta>1?'var(--red)':pctMeta>0.9?'var(--amber)':'var(--green)';
+    const ms=getMs(mesAte).map(m=>{
+      const v=getV(nome,base,ano,m);
+      const vm=getVM(nome,base,ano,m);
+      if(!v) return`<td class="muted" style="color:var(--muted);font-size:11px">—</td>`;
+      const cc=cellColor(v,vm);
+      const metaTip=vm>0?`Meta: ${fmtRHL(vm)}`:'Sem meta';
+      return`<td title="${metaTip}"><span style="background:${cc.bg};color:${cc.clr};padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;display:inline-block">${fmtRHL(v)}</span></td>`;
+    }).join('');
+    html+=`<tr style="border-left:2px solid ${acumCC?acumCC.bg:'transparent'}">
+      <td class="left" style="font-size:12px;font-weight:500">${nome}</td>
+      <td><span style="background:${acumCC?acumCC.bg:'transparent'};color:${acumCC?acumCC.clr:'var(--muted)'};padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700;display:inline-block">${acumRHL>0?fmtRHL(acumRHL):'—'}</span></td>
+      <td style="color:var(--muted);font-size:11px">${metaRHL>0?fmtRHL(metaRHL):'—'}</td>
+      <td style="color:${clrVsMeta};font-weight:700;font-size:12px">${metaRHL>0?(pctMeta*100).toFixed(0)+'%':'—'}</td>
+      ${ms}
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById(containerId).innerHTML=html;
+}
+
 function renderRHL() {
   const {base,ano,mesAte}=S;
   const df=document.getElementById('sel-dept-rhl').value;
   const linhaF_arr=msGetValues('ms-linha-rhl');
-
-  // Intersection: dept filter AND multi-select
   const linhas=ALL_NOMES.filter(n=>
     (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
-
   const totBRL=sumBRL2(linhas,base,ano,mesAte);
   const totVol=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
   const totRHL=totVol>0?totBRL/totVol:0;
-
   document.getElementById('kpi-rhl').innerHTML=`
     <div class="kpi amber">
       <div class="kpi-label">R$/HL Total Acumulado</div>
@@ -1493,57 +1651,17 @@ function renderRHL() {
       </div>`;
     }).join('')}
   `;
-  let html=`<table><thead><tr>
-    <th class="left">Linha</th>
-    <th>Acumulado R$/HL</th>
-    <th>Meta R$/HL</th>
-    <th>vs Meta</th>
-    ${MESES.slice(0,mesAte).map(m=>`<th>${m}</th>`).join('')}
-  </tr></thead><tbody>`;
-  // Calculate max RHL for color scaling
-  const allRHL=linhas.map(n=>{const b=sumBRL(n,base,ano,mesAte);const v=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);return v>0?b/v:0;});
-  const maxRHL=Math.max(...allRHL,0.0001);
-  linhas.forEach((nome,idx)=>{
-    const brlAcum=sumBRL(nome,base,ano,mesAte);
-    const volAcum=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
-    const metaAcum=sumMeta(nome,base,ano,mesAte);
-    const acumRHL=volAcum>0?brlAcum/volAcum:0;
-    const metaRHL=volAcum>0?metaAcum/volAcum:0;
-    const pctMeta=metaRHL>0?acumRHL/metaRHL:0;
-    const pctMax=acumRHL/maxRHL;
-    const rowCls=pctMax>0.7?'style="background:rgba(248,81,73,.06)"':pctMax>0.4?'style="background:rgba(240,163,10,.06)"':'';
-    const clrVsMeta=pctMeta>1?'var(--red)':pctMeta>0.9?'var(--amber)':'var(--green)';
-    const ms=getMs(mesAte).map(m=>{
-      const v=getRHL(nome,base,ano,m);
-      const vm=getMetaRHL(nome,base,ano,m);
-      if(!v) return`<td class="muted">-</td>`;
-      const p=v/maxRHL;
-      const bg=p>0.7?'rgba(248,81,73,.25)':p>0.4?'rgba(240,163,10,.2)':'rgba(63,185,80,.15)';
-      const clr=p>0.7?'#ff6b6b':p>0.4?'#2d7ef7':'#22c55e';
-      const metaTip=vm>0?` / Meta:${fmtRHL(vm)}`:'';
-      return`<td title="${metaTip}"><span style="background:${bg};color:${clr};padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600">${fmtRHL(v)}</span></td>`;
-    }).join('');
-    html+=`<tr ${rowCls}>
-      <td class="left">${nome}</td>
-      <td style="font-weight:600;color:${pctMax>0.7?'var(--red)':pctMax>0.4?'var(--amber)':'var(--green)'}">${fmtRHL(acumRHL)}</td>
-      <td style="color:var(--muted)">${metaRHL>0?fmtRHL(metaRHL):'—'}</td>
-      <td style="color:${clrVsMeta};font-weight:600">${metaRHL>0?(pctMeta*100).toFixed(0)+'%':'—'}</td>
-      ${ms}
-    </tr>`;
-  });
-  html+='</tbody></table>';
-  document.getElementById('t-rhl').innerHTML=html;
+  const getVolAcum=(base,ano,mesAte)=>{let s=0;getMs(mesAte).forEach(m=>s+=getVolEntregue(base,ano,m)||getVol(base,ano,m));return s;};
+  renderRHLTable('t-rhl', linhas, base, ano, mesAte, getRHL, getMetaRHL, getVolAcum);
   renderRHLChart();
+  renderRHLPuxado();
+  renderRHLComparativo();
 }
-
-function sumBRL2(linhas,base,ano,mesAte){let s=0;linhas.forEach(n=>s+=sumBRL(n,base,ano,mesAte));return s;}
 
 function renderRHLChart() {
   const {base,ano,mesAte}=S;
   const linhaF_arr=msGetValues('ms-linha-rhl');
   const linhas=linhaF_arr.includes('ALL')?ALL_NOMES:ALL_NOMES.filter(n=>linhaF_arr.includes(n));
-
-  // Monthly evolution line chart for selected linha
   const dataLine=Array.from({length:mesAte},(_,i)=>{
     const brl=linhas.reduce((s,n)=>s+getBRL(n,base,ano,i+1),0);
     const vol=getVolEntregue(base,ano,i+1)||getVol(base,ano,i+1);
@@ -1554,7 +1672,7 @@ function renderRHLChart() {
     type:'line',
     data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{
       label:'R$/HL',data:dataLine,
-      borderColor:'#2d7ef7',backgroundColor:'rgba(240,163,10,.15)',
+      borderColor:'#2d7ef7',backgroundColor:'rgba(45,126,247,.12)',
       tension:.4,fill:true,pointRadius:5,pointBackgroundColor:'#2d7ef7',pointBorderColor:'#0c0f14',pointBorderWidth:2
     }]},
     options:{
@@ -1566,6 +1684,98 @@ function renderRHLChart() {
       }
     }
   });
+}
+
+// ── R$/HL PUXADO ──────────────────────────────────────
+function renderRHLPuxado() {
+  const {base,ano,mesAte}=S;
+  const df=document.getElementById('sel-dept-rhl').value;
+  const linhaF_arr=msGetValues('ms-linha-rhl');
+  const linhas=ALL_NOMES.filter(n=>
+    (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
+  );
+  const totBRL=sumBRL2(linhas,base,ano,mesAte);
+  const totVol=sumVolPuxado(base,ano,mesAte);
+  const totRHL=totVol>0?totBRL/totVol:0;
+  const semDados=totVol===0;
+  document.getElementById('kpi-rhl-p').innerHTML=`
+    <div class="kpi amber">
+      <div class="kpi-label">R$/HL Puxado — Acumulado</div>
+      <div class="kpi-value">${semDados?'—':fmtRHL(totRHL)}</div>
+      <div class="kpi-sub">${semDados?'Preencha VOLUME PUXADA na aba VOLUME_REAL':'Vol puxado: '+fmtHL(totVol)+' HL · '+MESES[mesAte-1]+'/'+ano}</div>
+    </div>
+    ${DEPTS.map(d=>{
+      const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(n)));
+      const brl=sumBRL2(ls,base,ano,mesAte);
+      const rhl=totVol>0?brl/totVol:0;
+      const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
+      return`<div class="kpi ${clr}">
+        <div class="kpi-label">R$/HL Puxado ${d}</div>
+        <div class="kpi-value">${semDados?'—':fmtRHL(rhl)}</div>
+        <div class="kpi-sub">${fmtBRL(brl)} prejuízo</div>
+      </div>`;
+    }).join('')}
+  `;
+  if (semDados) {
+    document.getElementById('t-rhl-p').innerHTML=`<div style="padding:32px;text-align:center;color:var(--muted);font-size:13px">
+      ⚠️ Volume Puxado não encontrado — preencha a tabela <strong>VOLUME PUXADA</strong> na aba <strong>VOLUME_REAL</strong> da planilha e rode o script novamente.
+    </div>`;
+    return;
+  }
+  const getVolAcum=(base,ano,mesAte)=>{let s=0;getMs(mesAte).forEach(m=>s+=getVolPuxado(base,ano,m));return s;};
+  renderRHLTable('t-rhl-p', linhas, base, ano, mesAte, getRHLPuxado, getMetaRHLPuxado, getVolAcum);
+}
+
+// ── COMPARATIVO R$/HL vs R$/HL PUXADO ─────────────────
+function renderRHLComparativo() {
+  const {base,ano,mesAte}=S;
+  const df=document.getElementById('sel-dept-rhl').value;
+  const linhaF_arr=msGetValues('ms-linha-rhl');
+  const linhas=ALL_NOMES.filter(n=>
+    (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
+  );
+  const meses=getMs(mesAte);
+  let html=`<table><thead><tr>
+    <th class="left" style="min-width:160px">
+      <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Linha</span>
+    </th>
+    ${meses.map(m=>`<th colspan="2" style="text-align:center;border-left:1px solid var(--border)">
+      <span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--muted)">${MESES[m-1].slice(0,3).toUpperCase()}</span>
+    </th>`).join('')}
+  </tr><tr>
+    <th class="left" style="color:var(--muted);font-size:10px">—</th>
+    ${meses.map(()=>`
+      <th style="font-size:9px;color:#f59e0b;font-weight:700;border-left:1px solid var(--border)">ENTREGUE</th>
+      <th style="font-size:9px;color:#22c55e;font-weight:700">PUXADO</th>
+    `).join('')}
+  </tr></thead><tbody>`;
+  let lastDept='';
+  linhas.forEach(nome=>{
+    const def=NOME_TO_DEF[nome];
+    const dept=def?.dept||'';
+    if (dept!==lastDept) {
+      lastDept=dept;
+      const deptClr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+      html+=`<tr><td colspan="${1+meses.length*2}" style="padding:10px 12px 4px;background:var(--s1)">
+        <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr};display:inline-flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${deptClr};display:inline-block"></span>${dept}
+        </span>
+      </td></tr>`;
+    }
+    const cells=meses.map(m=>{
+      const ve=getRHL(nome,base,ano,m);
+      const vp=getRHLPuxado(nome,base,ano,m);
+      const diff=vp>0&&ve>0?((ve-vp)/vp*100):null;
+      const fmtCell=(v,clr)=>v>0?`<span style="color:${clr};font-size:11px;font-weight:600">${fmtRHL(v)}</span>`:`<span style="color:var(--muted);font-size:11px">—</span>`;
+      return`<td style="border-left:1px solid var(--border);text-align:center">${fmtCell(ve,'#f59e0b')}</td>
+             <td style="text-align:center">${fmtCell(vp,'#22c55e')}</td>`;
+    }).join('');
+    html+=`<tr><td class="left" style="font-size:12px;font-weight:500">${nome}</td>${cells}</tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('t-rhl-comp').innerHTML=html;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3043,6 +3253,7 @@ function applyData(d) {
   S.wqiDiario = d.wqiDiario || {};
   S.wqiMeta   = d.wqiMeta   || {};
   S.volEntregue = d.volEntregue || {};
+  S.volPuxado   = fixKeys(d.volPuxado || {});
 }
 
 function loadPrebuilt(){

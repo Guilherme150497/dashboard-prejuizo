@@ -315,10 +315,10 @@ for ri in range(6,len(rows_bm)):
                 metas.setdefault(nome,{}).setdefault('ALL',{}).setdefault(ano,{})
                 metas[nome]['ALL'][ano][m+1]=round(metas[nome]['ALL'][ano].get(m+1,0)+v,2)
 
-# Volume Real
-rows_vr=list(wb2['VOLUME_REAL'].iter_rows(min_row=1,max_row=8,values_only=True))
+# Volume Real (Venda) — tabela 1: linhas 4-6 da aba (idx 3-5), colunas C+ (idx 2+)
+rows_vr=list(wb2['VOLUME_REAL'].iter_rows(min_row=1,max_row=14,values_only=True))
 vol_real={'ALL':{}}
-for ri,base in [(2,'COBEB PM'),(3,'COBEB LP'),(4,'RDC ABAETÉ')]:
+for ri,base in [(3,'COBEB PM'),(4,'COBEB LP'),(5,'RDC ABAETÉ')]:
     vol_real[base]={}
     for m in range(12):
         v=float(rows_vr[ri][2+m] or 0)
@@ -326,6 +326,18 @@ for ri,base in [(2,'COBEB PM'),(3,'COBEB LP'),(4,'RDC ABAETÉ')]:
             for ano in [2025,2026]:
                 vol_real[base].setdefault(ano,{})[m+1]=v
                 vol_real['ALL'].setdefault(ano,{})[m+1]=vol_real['ALL'].get(ano,{}).get(m+1,0)+v
+
+# Volume Puxado — tabela 2: linhas 11-13 da aba (idx 10-12), mesmo layout
+vol_puxado={'ALL':{}}
+for ri,base in [(10,'COBEB PM'),(11,'COBEB LP'),(12,'RDC ABAETÉ')]:
+    vol_puxado[base]={}
+    for m in range(12):
+        v=float(rows_vr[ri][2+m] or 0)
+        if v:
+            for ano in [2025,2026]:
+                vol_puxado[base].setdefault(ano,{})[m+1]=v
+                vol_puxado['ALL'].setdefault(ano,{})[m+1]=vol_puxado['ALL'].get(ano,{}).get(m+1,0)+v
+print(f"   volPuxado carregado: {sum(len(v) for v in vol_puxado.items() if isinstance(v,dict))} entradas")
 
 # WQI Meta
 wqiMeta={}
@@ -339,7 +351,7 @@ def fk(d):
     if isinstance(d,dict): return {str(k):fk(v) for k,v in d.items()}
     return d
 
-payload = {'data':fk(data),'metas':fk(metas),'vol':fk(vol_real),'volEntregue':volEntregue,
+payload = {'data':fk(data),'metas':fk(metas),'vol':fk(vol_real),'volPuxado':fk(vol_puxado),'volEntregue':volEntregue,
            'rawProd':rawProd,'rawDiario':rawDiario,
            'wqiMensal':wqiMensal,'wqiDiario':wqiDiario,'wqiMeta':wqiMeta}
 
