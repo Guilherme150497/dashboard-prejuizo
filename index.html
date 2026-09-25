@@ -1259,9 +1259,7 @@ function sumVolEntregue(base,ano,ateM){ let s=0; getMs(ateM).forEach(m=>s+=getVo
 // ═══════════════════════════════════════════════════════
 function fmtBRL(v,compact=false) {
   if (compact) {
-    if(Math.abs(v)>=1e6) return 'R$'+(v/1e6).toFixed(2)+'M';
-    if(Math.abs(v)>=1e3) return 'R$'+(v/1e3).toFixed(1)+'k';
-    return 'R$'+v.toFixed(0);
+    return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   }
   return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
