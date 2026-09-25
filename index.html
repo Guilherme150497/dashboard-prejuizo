@@ -101,11 +101,18 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
 
 /* ── HEAT CELL ── */
 .heat{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;min-width:52px;text-align:right}
-.heat-none{background:rgba(139,148,158,.1);color:var(--muted)}
-.heat-ok{background:rgba(63,185,80,.2);color:var(--green)}
-.heat-warn{background:rgba(240,163,10,.2);color:var(--amber)}
-.heat-limit{background:rgba(240,100,10,.25);color:#f08030}
-.heat-over{background:rgba(248,81,73,.3);color:var(--red)}
+.heat-none{color:var(--muted)}
+.heat-ok{color:var(--green)}
+.heat-warn{color:var(--amber)}
+.heat-limit{color:#f08030}
+.heat-over{color:var(--red)}
+
+/* ── TABS (R$/HL section) ── */
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;background:var(--s1);border-radius:var(--r) var(--r) 0 0;overflow:hidden}
+.tab-btn{padding:10px 20px;font-size:12px;font-weight:600;color:var(--muted);background:transparent;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;font-family:var(--font);letter-spacing:.3px;white-space:nowrap}
+.tab-btn:hover{color:var(--text);background:var(--s2)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--s2)}
+.tab-panel{display:none}.tab-panel.active{display:block}
 
 /* ── SECTIONS ── */
 .section{display:none}.section.active{display:block}
@@ -163,7 +170,7 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="sb-label">Visões</div>
     <div class="sb-item" onclick="nav('pacote',this)"><span class="sb-icon">📋</span>Pacote Completo</div>
     <div class="sb-item" onclick="nav('hl',this)"><span class="sb-icon">🧮</span>Visão em HL</div>
-    <div class="sb-item" onclick="nav('rhl',this)"><span class="sb-icon">💰</span>Visão R$/HL</div>
+    <div class="sb-item" onclick="nav('rhl',this)"><span class="sb-icon">💰</span>Visão R$/HL Entregue</div>
     <div class="sb-item" onclick="nav('meta',this)"><span class="sb-icon">🎯</span>Realizado vs Meta</div>
     <div class="sb-item" onclick="nav('produto',this)"><span class="sb-icon">📦</span>Por Produto</div>
     <div class="sb-item" onclick="nav('axa',this)"><span class="sb-icon">📈</span>Ano x Ano</div>
@@ -304,84 +311,71 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
 
   <!-- ══ VISÃO R$/HL ══ -->
   <div class="section" id="s-rhl">
-    <div class="kpi-row" id="kpi-rhl"></div>
-    <div class="panel">
-      <div class="panel-head">
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0"></span>
-            <div>
-              <div class="panel-title" style="margin:0">R$/HL por Linha</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px">
-                <span style="background:rgba(245,158,11,.15);color:#f59e0b;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.04em">÷ VOLUME ENTREGUE</span>
-                <span style="color:var(--muted)">Prejuízo financeiro dividido pelo volume entregue no período</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <select id="sel-dept-rhl" onchange="renderRHL()">
-            <option value="ALL">Todos os depart.</option>
-            <option value="Entrega">Entrega</option>
-            <option value="Armazém">Armazém</option>
-            <option value="Puxada">Puxada</option>
-            <option value="Diferença de AG">Diferença de AG</option>
-            <option value="Erro de Programação">Erro de Programação</option>
-          </select>
-          <div class="ms-wrap" id="ms-linha-rhl"><button class="ms-btn">Todas as linhas</button><div class="ms-dropdown"></div></div>
-        </div>
+    <!-- Topbar da seção com controles compartilhados -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:16px;font-weight:700;color:var(--text)">Visão <span style="color:var(--amber)">R$/HL</span></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="sel-dept-rhl" onchange="renderRHL()">
+          <option value="ALL">Todos os depart.</option>
+          <option value="Entrega">Entrega</option>
+          <option value="Armazém">Armazém</option>
+          <option value="Puxada">Puxada</option>
+          <option value="Diferença de AG">Diferença de AG</option>
+          <option value="Erro de Programação">Erro de Programação</option>
+        </select>
+        <div class="ms-wrap" id="ms-linha-rhl"><button class="ms-btn">Todas as linhas</button><div class="ms-dropdown"></div></div>
       </div>
-      <div class="panel-body no-pad"><div class="tw" id="t-rhl"></div></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:4px;height:22px;background:var(--accent);border-radius:2px;display:inline-block;flex-shrink:0"></span>
-          <div>
-            <div class="panel-title" style="margin:0">Evolução R$/HL — Linha selecionada</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px">Variação mês a mês no período selecionado</div>
-          </div>
-        </div>
-      </div>
-      <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-rhl-linha"></canvas></div></div>
     </div>
 
-    <!-- ── R$/HL PUXADO ── -->
-    <div class="kpi-row" id="kpi-rhl-p" style="margin-top:8px"></div>
-    <div class="panel">
-      <div class="panel-head">
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="width:4px;height:22px;background:#22c55e;border-radius:2px;display:inline-block;flex-shrink:0"></span>
-            <div>
-              <div class="panel-title" style="margin:0">R$/HL Puxado por Linha</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px">
-                <span style="background:rgba(34,197,94,.15);color:#22c55e;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.04em">÷ VOLUME PUXADO</span>
-                <span style="color:var(--muted)">Mesmo prejuízo dividido pelo volume puxado (comprado da cervejaria)</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <!-- Tab bar -->
+    <div class="panel" style="padding:0;overflow:visible">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-rhl-entregue" onclick="setRHLTab('entregue')">💰 R$/HL Entregue</button>
+        <button class="tab-btn" id="tab-rhl-puxado" onclick="setRHLTab('puxado')">📦 R$/HL Puxado</button>
+        <button class="tab-btn" id="tab-rhl-comp" onclick="setRHLTab('comp')">⚖️ Comparativo</button>
       </div>
-      <div class="panel-body no-pad"><div class="tw" id="t-rhl-p"></div></div>
-    </div>
 
-    <!-- ── COMPARATIVO ── -->
-    <div class="panel">
-      <div class="panel-head">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:4px;height:22px;background:#a78bfa;border-radius:2px;display:inline-block;flex-shrink:0"></span>
-          <div>
-            <div class="panel-title" style="margin:0">Comparativo R$/HL — Entregue vs Puxado</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:8px">
-              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:3px;background:#f59e0b;border-radius:2px;display:inline-block"></span><span style="color:#f59e0b;font-size:10px;font-weight:700">ENTREGUE</span></span>
-              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:3px;background:#22c55e;border-radius:2px;display:inline-block"></span><span style="color:#22c55e;font-size:10px;font-weight:700">PUXADO</span></span>
-              <span style="color:var(--muted)">Linha a linha, mês a mês</span>
-            </div>
+      <!-- Tab: R$/HL Entregue -->
+      <div class="tab-panel active" id="tp-rhl-entregue" style="padding:16px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="background:rgba(245,158,11,.12);color:#f59e0b;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.05em">÷ VOLUME ENTREGUE</span>
+          <span>Prejuízo financeiro dividido pelo volume entregue no período</span>
+        </div>
+        <div class="kpi-row" id="kpi-rhl"></div>
+        <div class="panel" style="margin-bottom:14px">
+          <div class="panel-body no-pad"><div class="tw" id="t-rhl"></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div><div class="panel-title">Evolução R$/HL Entregue — Linha selecionada</div><div class="panel-sub">Variação mês a mês</div></div>
           </div>
+          <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-rhl-linha"></canvas></div></div>
         </div>
       </div>
-      <div class="panel-body no-pad"><div class="tw" id="t-rhl-comp"></div></div>
+
+      <!-- Tab: R$/HL Puxado -->
+      <div class="tab-panel" id="tp-rhl-puxado" style="padding:16px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="background:rgba(34,197,94,.12);color:#22c55e;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.05em">÷ VOLUME PUXADO</span>
+          <span>Mesmo prejuízo dividido pelo volume puxado (comprado da cervejaria)</span>
+        </div>
+        <div class="kpi-row" id="kpi-rhl-p"></div>
+        <div class="panel">
+          <div class="panel-body no-pad"><div class="tw" id="t-rhl-p"></div></div>
+        </div>
+      </div>
+
+      <!-- Tab: Comparativo -->
+      <div class="tab-panel" id="tp-rhl-comp" style="padding:16px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:3px;background:#f59e0b;border-radius:2px;display:inline-block"></span><span style="color:#f59e0b;font-size:10px;font-weight:700">ENTREGUE</span></span>
+          <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:3px;background:#22c55e;border-radius:2px;display:inline-block"></span><span style="color:#22c55e;font-size:10px;font-weight:700">PUXADO</span></span>
+          <span>Linha a linha, mês a mês</span>
+        </div>
+        <div class="panel">
+          <div class="panel-body no-pad"><div class="tw" id="t-rhl-comp"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1565,10 +1559,10 @@ function renderRHLTable(containerId, linhas, base, ano, mesAte, getV, getVM, get
   // Cores baseadas na meta: verde=abaixo da meta(bom), vermelho=acima(ruim)
   function cellColor(v, vm) {
     if (!v) return null;
-    if (vm <= 0) return {bg:'rgba(45,126,247,.12)',clr:'#7ab4ff'}; // sem meta = azul neutro
+    if (vm <= 0) return {clr:'#7ab4ff'}; // sem meta = azul neutro
     return v > vm
-      ? {bg:'rgba(239,68,68,.22)',clr:'#ff6b6b'}   // acima da meta = RUIM = vermelho
-      : {bg:'rgba(34,197,94,.18)',clr:'#4ade80'};  // abaixo da meta = BOM = verde
+      ? {clr:'#ff6b6b'}   // acima da meta = RUIM = vermelho
+      : {clr:'#4ade80'};  // abaixo da meta = BOM = verde
   }
   let html=`<table><thead><tr>
     <th class="left" style="min-width:160px">
@@ -1608,11 +1602,11 @@ function renderRHLTable(containerId, linhas, base, ano, mesAte, getV, getVM, get
       if(!v) return`<td class="muted" style="color:var(--muted);font-size:11px">—</td>`;
       const cc=cellColor(v,vm);
       const metaTip=vm>0?`Meta: ${fmtRHL(vm)}`:'Sem meta';
-      return`<td title="${metaTip}"><span style="background:${cc.bg};color:${cc.clr};padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;display:inline-block">${fmtRHL(v)}</span></td>`;
+      return`<td title="${metaTip}" style="color:${cc?cc.clr:'var(--muted)'};font-size:11px;font-weight:600">${fmtRHL(v)}</td>`;
     }).join('');
-    html+=`<tr style="border-left:2px solid ${acumCC?acumCC.bg:'transparent'}">
+    html+=`<tr>
       <td class="left" style="font-size:12px;font-weight:500">${nome}</td>
-      <td><span style="background:${acumCC?acumCC.bg:'transparent'};color:${acumCC?acumCC.clr:'var(--muted)'};padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700;display:inline-block">${acumRHL>0?fmtRHL(acumRHL):'—'}</span></td>
+      <td style="color:${acumCC?acumCC.clr:'var(--muted)'};font-size:12px;font-weight:700">${acumRHL>0?fmtRHL(acumRHL):'—'}</td>
       <td style="color:var(--muted);font-size:11px">${metaRHL>0?fmtRHL(metaRHL):'—'}</td>
       <td style="color:${clrVsMeta};font-weight:700;font-size:12px">${metaRHL>0?(pctMeta*100).toFixed(0)+'%':'—'}</td>
       ${ms}
@@ -1620,6 +1614,13 @@ function renderRHLTable(containerId, linhas, base, ano, mesAte, getV, getVM, get
   });
   html+='</tbody></table>';
   document.getElementById(containerId).innerHTML=html;
+}
+
+function setRHLTab(tab) {
+  ['entregue','puxado','comp'].forEach(t => {
+    document.getElementById('tab-rhl-'+t).classList.toggle('active', t===tab);
+    document.getElementById('tp-rhl-'+t).classList.toggle('active', t===tab);
+  });
 }
 
 function renderRHL() {
