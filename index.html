@@ -1106,8 +1106,7 @@ function parseMetas(wb) {
   const SKIP = new Set(['entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total','meta','janeiro','']);
   rows.slice(6).forEach((row,ri) => {
     let nome = String(row[4]||'').trim();
-    // Na BASE_METAS, 'Diferença de AG' representa 'Erro de Programação'
-    if (nome === 'Diferença de AG') nome = 'Erro de Programação';
+    // Erro de Programação NÃO tem meta — não mapear 'Diferença de AG' para ele
     if (!nome || SKIP.has(nome.toLowerCase()) || !NOME_TO_DEF[nome]) return;
     const tPM=flt(row[5]), tLP=flt(row[6]), tAB=flt(row[7]);
     for (let m=0; m<12; m++) {
@@ -1769,55 +1768,84 @@ function renderRHLComparativo() {
     (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
+  const volE=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
+  const volP=sumVolPuxado(base,ano,mesAte);
 
-  // ── Resumo acumulado por departamento (cards topo) ──
+  // ── Cards de resumo por departamento ──
   const deptSummary = DEPTS.map(d=>{
     const ls=linhas.filter(n=>NOME_TO_DEF[n].dept===d);
     const brl=sumBRL2(ls,base,ano,mesAte);
-    const volE=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
-    const volP=sumVolPuxado(base,ano,mesAte);
+    const metaTot=ls.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
     const rhlE=volE>0?brl/volE:0;
     const rhlP=volP>0?brl/volP:0;
-    const diff=rhlE>0&&rhlP>0?((rhlE-rhlP)/rhlP*100):null;
+    const metaRHL=volE>0&&metaTot>0?metaTot/volE:0;
     const clr=d==='Entrega'?'#f59e0b':d==='Armazém'?'#2d7ef7':'#22c55e';
-    return {d,rhlE,rhlP,diff,clr};
+    return {d,rhlE,rhlP,metaRHL,clr};
   });
 
   let html=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
-    ${deptSummary.map(({d,rhlE,rhlP,diff,clr})=>{
-      const diffClr=diff===null?'var(--muted)':diff>0?'var(--red)':'var(--green)';
-      const diffTxt=diff===null?'—':(diff>0?`▲ +${diff.toFixed(1)}%`:`▼ ${diff.toFixed(1)}%`);
-      const diffLabel=diff===null?'sem vol puxado':diff>0?'entregue > puxado':'entregue < puxado';
+    ${deptSummary.map(({d,rhlE,rhlP,metaRHL,clr})=>{
+      const pctE=metaRHL>0?(rhlE/metaRHL*100):null;
+      const pctP=metaRHL>0?(rhlP/metaRHL*100):null;
+      const barWE=metaRHL>0?Math.min(rhlE/metaRHL*100,100).toFixed(0):(rhlE>0?100:0);
+      const barWP=metaRHL>0?Math.min(rhlP/metaRHL*100,100).toFixed(0):(rhlP>0?100:0);
+      const barClrE=pctE===null?clr:pctE>100?'var(--red)':pctE>85?'var(--amber)':'var(--green)';
+      const barClrP=pctP===null?'#22c55e':pctP>100?'var(--red)':pctP>85?'var(--amber)':'var(--green)';
       return`<div style="background:var(--s2);border:1px solid var(--border);border-top:3px solid ${clr};border-radius:var(--r);padding:14px 16px">
-        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:${clr};margin-bottom:10px">${d}</div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:${clr};margin-bottom:12px">${d}</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
           <div>
-            <div style="font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.04em;margin-bottom:2px">÷ ENTREGUE</div>
-            <div style="font-size:18px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums">${rhlE>0?fmtRHL(rhlE):'—'}</div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">÷ Entregue</span>
+              <span style="font-size:13px;font-weight:800;color:#f59e0b;font-variant-numeric:tabular-nums">${rhlE>0?fmtRHL(rhlE):'—'}</span>
+            </div>
+            <div style="height:5px;background:var(--s1);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${barWE}%;background:${barClrE};border-radius:3px;transition:width .3s"></div>
+            </div>
+            ${pctE!==null?`<div style="font-size:9px;color:${barClrE};text-align:right;margin-top:2px;font-weight:600">${pctE.toFixed(1)}% da meta</div>`:''}
           </div>
-          <div style="text-align:right">
-            <div style="font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.04em;margin-bottom:2px">÷ PUXADO</div>
-            <div style="font-size:18px;font-weight:700;color:#22c55e;font-variant-numeric:tabular-nums">${rhlP>0?fmtRHL(rhlP):'—'}</div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">÷ Puxado</span>
+              <span style="font-size:13px;font-weight:800;color:#22c55e;font-variant-numeric:tabular-nums">${rhlP>0?fmtRHL(rhlP):'—'}</span>
+            </div>
+            <div style="height:5px;background:var(--s1);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${barWP}%;background:${barClrP};border-radius:3px;transition:width .3s"></div>
+            </div>
+            ${pctP!==null?`<div style="font-size:9px;color:${barClrP};text-align:right;margin-top:2px;font-weight:600">${pctP.toFixed(1)}% da meta</div>`:''}
           </div>
-        </div>
-        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:9px;color:var(--muted)">${diffLabel}</div>
-          <div style="font-size:13px;font-weight:800;color:${diffClr}">${diffTxt}</div>
+          ${metaRHL>0?`<div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:9px;color:var(--muted)">Meta R$/HL</span>
+            <span style="font-size:11px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums">${fmtRHL(metaRHL)}</span>
+          </div>`:'<div style="border-top:1px solid var(--border);padding-top:8px;font-size:9px;color:var(--muted)">sem meta definida</div>'}
         </div>
       </div>`;
     }).join('')}
   </div>`;
 
-  // ── Tabela por linha com sparkbar ──
-  html+=`<div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px">
-      <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Detalhe por linha · acumulado até ${MESES[mesAte-1]}/${ano}</span>
-      <div style="display:flex;gap:12px;margin-left:auto">
-        <span style="font-size:10px;font-weight:700;color:#f59e0b">● Entregue</span>
-        <span style="font-size:10px;font-weight:700;color:#22c55e">● Puxado</span>
-        <span style="font-size:10px;font-weight:700;color:var(--muted)">△ Diferença</span>
+  // ── Tabela detalhe por linha ──
+  html+=`<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+    <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:11px;font-weight:700;color:var(--text)">Detalhe por linha — acumulado até ${MESES[mesAte-1]}/${ano}</span>
+      <div style="display:flex;gap:16px">
+        <span style="font-size:10px;color:#f59e0b;font-weight:600">▓ ÷ Entregue</span>
+        <span style="font-size:10px;color:#22c55e;font-weight:600">▓ ÷ Puxado</span>
+        <span style="font-size:10px;color:var(--muted);font-weight:600">─ Meta</span>
       </div>
-    </div>`;
+    </div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:var(--s2)">
+          <th style="text-align:left;padding:8px 14px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">Linha</th>
+          <th style="text-align:right;padding:8px 14px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#f59e0b;font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">R$/HL Entregue</th>
+          <th style="text-align:right;padding:8px 14px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#22c55e;font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">R$/HL Puxado</th>
+          <th style="text-align:right;padding:8px 14px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">Meta R$/HL</th>
+          <th style="text-align:right;padding:8px 14px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">% vs Meta</th>
+          <th style="text-align:right;padding:8px 14px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">E vs P</th>
+        </tr>
+      </thead>
+      <tbody>`;
 
   let lastDept='';
   linhas.forEach(nome=>{
@@ -1826,45 +1854,33 @@ function renderRHLComparativo() {
     if(dept!==lastDept){
       lastDept=dept;
       const deptClr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
-      html+=`<div style="padding:6px 14px;background:var(--s1);border-top:1px solid var(--border)">
+      html+=`<tr><td colspan="6" style="padding:7px 14px;background:var(--s2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
         <span style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr}">${dept}</span>
-      </div>`;
+      </td></tr>`;
     }
     const brl=sumBRL(nome,base,ano,mesAte);
-    const volE=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
-    const volP=sumVolPuxado(base,ano,mesAte);
+    const metaBRL=sumMeta(nome,base,ano,mesAte);
+    const isEP=dept==='Erro de Programação';
     const rhlE=volE>0?brl/volE:0;
     const rhlP=volP>0?brl/volP:0;
-    if(!rhlE&&!rhlP){return;}
-    const diff=rhlE>0&&rhlP>0?((rhlE-rhlP)/rhlP*100):null;
-    const diffClr=diff===null?'var(--muted)':diff>5?'var(--red)':diff<-5?'var(--green)':'var(--amber)';
-    const diffTxt=diff===null?'—':(diff>=0?`+${diff.toFixed(1)}%`:`${diff.toFixed(1)}%`);
-    // barra comparativa: maior dos dois = 100%
-    const maxV=Math.max(rhlE,rhlP)||1;
-    const wE=(rhlE/maxV*100).toFixed(0);
-    const wP=(rhlP/maxV*100).toFixed(0);
-    html+=`<div style="padding:10px 14px;border-top:1px solid var(--border);display:grid;grid-template-columns:160px 1fr 80px;align-items:center;gap:12px">
-      <div style="font-size:12px;font-weight:500;color:var(--text)">${nome}</div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:9px;font-size:9px;color:#f59e0b;font-weight:700;flex-shrink:0">E</div>
-          <div style="flex:1;height:6px;background:var(--s1);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${wE}%;background:#f59e0b;border-radius:3px"></div>
-          </div>
-          <div style="font-size:11px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums;min-width:64px;text-align:right">${rhlE>0?fmtRHL(rhlE):'—'}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:9px;font-size:9px;color:#22c55e;font-weight:700;flex-shrink:0">P</div>
-          <div style="flex:1;height:6px;background:var(--s1);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${wP}%;background:#22c55e;border-radius:3px"></div>
-          </div>
-          <div style="font-size:11px;font-weight:700;color:#22c55e;font-variant-numeric:tabular-nums;min-width:64px;text-align:right">${rhlP>0?fmtRHL(rhlP):'—'}</div>
-        </div>
-      </div>
-      <div style="text-align:right;font-size:12px;font-weight:800;color:${diffClr}">${diffTxt}</div>
-    </div>`;
+    if(!rhlE&&!rhlP) return;
+    const metaRHL=(!isEP&&volE>0&&metaBRL>0)?metaBRL/volE:0;
+    const pctVsMeta=metaRHL>0?(rhlE/metaRHL*100):null;
+    const pctClr=pctVsMeta===null?'var(--muted)':pctVsMeta>100?'var(--red)':pctVsMeta>85?'var(--amber)':'var(--green)';
+    const pctTxt=pctVsMeta!==null?`${pctVsMeta.toFixed(1)}%`:'—';
+    const evpDiff=rhlE>0&&rhlP>0?((rhlE-rhlP)/rhlP*100):null;
+    const evpClr=evpDiff===null?'var(--muted)':Math.abs(evpDiff)<3?'var(--muted)':evpDiff>0?'var(--amber)':'var(--green)';
+    const evpTxt=evpDiff===null?'—':(evpDiff>=0?`+${evpDiff.toFixed(1)}%`:`${evpDiff.toFixed(1)}%`);
+    html+=`<tr style="border-top:1px solid var(--border)" onmouseenter="this.style.background='rgba(255,255,255,.02)'" onmouseleave="this.style.background=''">
+      <td style="padding:9px 14px;text-align:left;font-size:12px;font-weight:500;color:var(--text);white-space:nowrap">${nome}</td>
+      <td style="padding:9px 14px;text-align:right;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums;font-family:var(--mono)">${rhlE>0?fmtRHL(rhlE):'—'}</td>
+      <td style="padding:9px 14px;text-align:right;font-weight:700;color:#22c55e;font-variant-numeric:tabular-nums;font-family:var(--mono)">${rhlP>0?fmtRHL(rhlP):'—'}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-family:var(--mono)">${metaRHL>0?fmtRHL(metaRHL):'—'}</td>
+      <td style="padding:9px 14px;text-align:right;font-weight:700;color:${pctClr};font-variant-numeric:tabular-nums">${pctTxt}</td>
+      <td style="padding:9px 14px;text-align:right;font-weight:700;color:${evpClr};font-variant-numeric:tabular-nums">${evpTxt}</td>
+    </tr>`;
   });
-  html+='</div>';
+  html+=`</tbody></table></div></div>`;
   document.getElementById('t-rhl-comp').innerHTML=html;
 }
 
