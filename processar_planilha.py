@@ -301,8 +301,7 @@ vol_ab=[float(rows_bm[4][6+m] or 0) for m in range(12)]
 metas={}
 for ri in range(6,len(rows_bm)):
     row=rows_bm[ri]; nome=str(row[4] or '').strip()
-    # Na BASE_METAS, 'Diferença de AG' representa 'Erro de Programação'
-    if nome == 'Diferença de AG': nome = 'Erro de Programação'
+    # Erro de Programação não tem meta — nunca mapear outra linha para ele
     if not nome or nome.lower() in SKIP or nome not in ALL_LINHAS: continue
     for m in range(12):
         for bk,taxa,vol in [('COBEB PM',float(row[5] or 0),vol_pm),
