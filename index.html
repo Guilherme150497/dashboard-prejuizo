@@ -1644,16 +1644,26 @@ function renderRHL() {
       const metaBRL=ls.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
       const rhl=totVol>0?brl/totVol:0;
       const metaRHL=totVol>0?metaBRL/totVol:0;
-      const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima':'▼ abaixo'):'';
-      const clrSim=metaRHL>0?(rhl>metaRHL?'var(--red)':'var(--green)'):'';
+      const pct=metaRHL>0?Math.min(rhl/metaRHL*100,200):0;
+      const barClr=pct>100?'var(--red)':pct>85?'var(--amber)':'var(--green)';
+      const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima da meta':'▼ abaixo da meta'):'sem meta';
+      const simClr=metaRHL>0?(rhl>metaRHL?'var(--red)':'var(--green)'):'var(--muted)';
+      const clrAcc=d==='Entrega'?'var(--amber)':d==='Armazém'?'var(--blue)':'var(--green)';
       const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
-      return`<div class="kpi ${clr}">
+      return`<div class="kpi ${clr}" style="display:flex;flex-direction:column;gap:6px">
         <div class="kpi-label">R$/HL ${d}</div>
         <div class="kpi-value">${fmtRHL(rhl)}</div>
-        <div class="kpi-sub" style="display:flex;flex-direction:column;gap:2px">
-          <span>Meta: ${metaRHL>0?fmtRHL(metaRHL):'—'} ${metaRHL>0?`<span style="color:${clrSim};font-weight:700">${simbolo}</span>`:''}</span>
-          <span style="color:var(--muted)">${fmtBRL(brl)} prejuízo</span>
-        </div>
+        ${metaRHL>0?`
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="height:4px;background:var(--s1);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(pct,100)}%;background:${barClr};border-radius:2px;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:10px;color:var(--muted)">Meta ${fmtRHL(metaRHL)}</span>
+            <span style="font-size:10px;font-weight:700;color:${simClr}">${simbolo}</span>
+          </div>
+        </div>`:'<div style="font-size:10px;color:var(--muted)">sem meta definida</div>'}
+        <div style="font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:4px">${fmtBRL(brl)} prejuízo</div>
       </div>`;
     }).join('')}
   `;
@@ -1718,16 +1728,25 @@ function renderRHLPuxado() {
       const rhl=totVol>0?brl/totVol:0;
       const metaRHL=totVol>0?metaBRL/totVol:0;
       const ok=metaRHL>0&&rhl<=metaRHL;
-      const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima':'▼ abaixo'):'';
-      const clrSim=metaRHL>0?(rhl>metaRHL?'var(--red)':'var(--green)'):'';
+      const pct=metaRHL>0?Math.min(rhl/metaRHL*100,200):0;
+      const barClr=pct>100?'var(--red)':pct>85?'var(--amber)':'var(--green)';
+      const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima da meta':'▼ abaixo da meta'):'sem meta';
+      const simClr=metaRHL>0?(rhl>metaRHL?'var(--red)':'var(--green)'):'var(--muted)';
       const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
-      return`<div class="kpi ${clr}">
+      return`<div class="kpi ${clr}" style="display:flex;flex-direction:column;gap:6px">
         <div class="kpi-label">R$/HL Puxado ${d}</div>
         <div class="kpi-value">${semDados?'—':fmtRHL(rhl)}</div>
-        <div class="kpi-sub" style="display:flex;flex-direction:column;gap:2px">
-          <span>Meta: ${metaRHL>0?fmtRHL(metaRHL):'—'} ${metaRHL>0?`<span style="color:${clrSim};font-weight:700">${simbolo}</span>`:''}</span>
-          <span style="color:var(--muted)">${fmtBRL(brl)} prejuízo</span>
-        </div>
+        ${metaRHL>0&&!semDados?`
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="height:4px;background:var(--s1);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(pct,100)}%;background:${barClr};border-radius:2px;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:10px;color:var(--muted)">Meta ${fmtRHL(metaRHL)}</span>
+            <span style="font-size:10px;font-weight:700;color:${simClr}">${simbolo}</span>
+          </div>
+        </div>`:'<div style="font-size:10px;color:var(--muted)">sem meta definida</div>'}
+        <div style="font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:4px">${fmtBRL(brl)} prejuízo</div>
       </div>`;
     }).join('')}
   `;
@@ -1750,45 +1769,102 @@ function renderRHLComparativo() {
     (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
-  const meses=getMs(mesAte);
-  let html=`<table><thead><tr>
-    <th class="left" style="min-width:160px">
-      <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Linha</span>
-    </th>
-    ${meses.map(m=>`<th colspan="2" style="text-align:center;border-left:1px solid var(--border)">
-      <span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--muted)">${MESES[m-1].slice(0,3).toUpperCase()}</span>
-    </th>`).join('')}
-  </tr><tr>
-    <th class="left" style="color:var(--muted);font-size:10px">—</th>
-    ${meses.map(()=>`
-      <th style="font-size:9px;color:#f59e0b;font-weight:700;border-left:1px solid var(--border)">ENTREGUE</th>
-      <th style="font-size:9px;color:#22c55e;font-weight:700">PUXADO</th>
-    `).join('')}
-  </tr></thead><tbody>`;
+
+  // ── Resumo acumulado por departamento (cards topo) ──
+  const deptSummary = DEPTS.map(d=>{
+    const ls=linhas.filter(n=>NOME_TO_DEF[n].dept===d);
+    const brl=sumBRL2(ls,base,ano,mesAte);
+    const volE=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
+    const volP=sumVolPuxado(base,ano,mesAte);
+    const rhlE=volE>0?brl/volE:0;
+    const rhlP=volP>0?brl/volP:0;
+    const diff=rhlE>0&&rhlP>0?((rhlE-rhlP)/rhlP*100):null;
+    const clr=d==='Entrega'?'#f59e0b':d==='Armazém'?'#2d7ef7':'#22c55e';
+    return {d,rhlE,rhlP,diff,clr};
+  });
+
+  let html=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+    ${deptSummary.map(({d,rhlE,rhlP,diff,clr})=>{
+      const diffClr=diff===null?'var(--muted)':diff>0?'var(--red)':'var(--green)';
+      const diffTxt=diff===null?'—':(diff>0?`▲ +${diff.toFixed(1)}%`:`▼ ${diff.toFixed(1)}%`);
+      const diffLabel=diff===null?'sem vol puxado':diff>0?'entregue > puxado':'entregue < puxado';
+      return`<div style="background:var(--s2);border:1px solid var(--border);border-top:3px solid ${clr};border-radius:var(--r);padding:14px 16px">
+        <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:${clr};margin-bottom:10px">${d}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
+          <div>
+            <div style="font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.04em;margin-bottom:2px">÷ ENTREGUE</div>
+            <div style="font-size:18px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums">${rhlE>0?fmtRHL(rhlE):'—'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.04em;margin-bottom:2px">÷ PUXADO</div>
+            <div style="font-size:18px;font-weight:700;color:#22c55e;font-variant-numeric:tabular-nums">${rhlP>0?fmtRHL(rhlP):'—'}</div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:9px;color:var(--muted)">${diffLabel}</div>
+          <div style="font-size:13px;font-weight:800;color:${diffClr}">${diffTxt}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  // ── Tabela por linha com sparkbar ──
+  html+=`<div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px">
+      <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Detalhe por linha · acumulado até ${MESES[mesAte-1]}/${ano}</span>
+      <div style="display:flex;gap:12px;margin-left:auto">
+        <span style="font-size:10px;font-weight:700;color:#f59e0b">● Entregue</span>
+        <span style="font-size:10px;font-weight:700;color:#22c55e">● Puxado</span>
+        <span style="font-size:10px;font-weight:700;color:var(--muted)">△ Diferença</span>
+      </div>
+    </div>`;
+
   let lastDept='';
   linhas.forEach(nome=>{
     const def=NOME_TO_DEF[nome];
     const dept=def?.dept||'';
-    if (dept!==lastDept) {
+    if(dept!==lastDept){
       lastDept=dept;
       const deptClr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
-      html+=`<tr><td colspan="${1+meses.length*2}" style="padding:10px 12px 4px;background:var(--s1)">
-        <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr};display:inline-flex;align-items:center;gap:6px">
-          <span style="width:6px;height:6px;border-radius:50%;background:${deptClr};display:inline-block"></span>${dept}
-        </span>
-      </td></tr>`;
+      html+=`<div style="padding:6px 14px;background:var(--s1);border-top:1px solid var(--border)">
+        <span style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr}">${dept}</span>
+      </div>`;
     }
-    const cells=meses.map(m=>{
-      const ve=getRHL(nome,base,ano,m);
-      const vp=getRHLPuxado(nome,base,ano,m);
-      const diff=vp>0&&ve>0?((ve-vp)/vp*100):null;
-      const fmtCell=(v,clr)=>v>0?`<span style="color:${clr};font-size:11px;font-weight:600">${fmtRHL(v)}</span>`:`<span style="color:var(--muted);font-size:11px">—</span>`;
-      return`<td style="border-left:1px solid var(--border);text-align:center">${fmtCell(ve,'#f59e0b')}</td>
-             <td style="text-align:center">${fmtCell(vp,'#22c55e')}</td>`;
-    }).join('');
-    html+=`<tr><td class="left" style="font-size:12px;font-weight:500">${nome}</td>${cells}</tr>`;
+    const brl=sumBRL(nome,base,ano,mesAte);
+    const volE=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
+    const volP=sumVolPuxado(base,ano,mesAte);
+    const rhlE=volE>0?brl/volE:0;
+    const rhlP=volP>0?brl/volP:0;
+    if(!rhlE&&!rhlP){return;}
+    const diff=rhlE>0&&rhlP>0?((rhlE-rhlP)/rhlP*100):null;
+    const diffClr=diff===null?'var(--muted)':diff>5?'var(--red)':diff<-5?'var(--green)':'var(--amber)';
+    const diffTxt=diff===null?'—':(diff>=0?`+${diff.toFixed(1)}%`:`${diff.toFixed(1)}%`);
+    // barra comparativa: maior dos dois = 100%
+    const maxV=Math.max(rhlE,rhlP)||1;
+    const wE=(rhlE/maxV*100).toFixed(0);
+    const wP=(rhlP/maxV*100).toFixed(0);
+    html+=`<div style="padding:10px 14px;border-top:1px solid var(--border);display:grid;grid-template-columns:160px 1fr 80px;align-items:center;gap:12px">
+      <div style="font-size:12px;font-weight:500;color:var(--text)">${nome}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:9px;font-size:9px;color:#f59e0b;font-weight:700;flex-shrink:0">E</div>
+          <div style="flex:1;height:6px;background:var(--s1);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${wE}%;background:#f59e0b;border-radius:3px"></div>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums;min-width:64px;text-align:right">${rhlE>0?fmtRHL(rhlE):'—'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:9px;font-size:9px;color:#22c55e;font-weight:700;flex-shrink:0">P</div>
+          <div style="flex:1;height:6px;background:var(--s1);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${wP}%;background:#22c55e;border-radius:3px"></div>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:#22c55e;font-variant-numeric:tabular-nums;min-width:64px;text-align:right">${rhlP>0?fmtRHL(rhlP):'—'}</div>
+        </div>
+      </div>
+      <div style="text-align:right;font-size:12px;font-weight:800;color:${diffClr}">${diffTxt}</div>
+    </div>`;
   });
-  html+='</tbody></table>';
+  html+='</div>';
   document.getElementById('t-rhl-comp').innerHTML=html;
 }
 
