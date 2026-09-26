@@ -690,7 +690,7 @@ const DEPTS_ALL = ['Entrega','Armazém','Puxada','Erro de Programação','Difere
 const DEPTS_SEPARADOS = ['Erro de Programação','Diferença de AG']; // não entram no total
 const NOMES_TOTAL = ALL_NOMES.filter(n => !DEPTS_SEPARADOS.includes(NOME_TO_DEF[n].dept));
 const C16 = ['#2d7ef7','#ef4444','#22c55e','#2d7ef7','#a78bfa','#d97706','#1abc9c','#e67e22','#e74c3c','#2ecc71','#3498db','#f39c12','#16a085','#8e44ad','#d35400','#27ae60'];
-const DEPT_C = {Entrega:'#2d7ef7', Armazém:'#2d7ef7', Puxada:'#22c55e', 'Erro de Programação':'#d97706', 'Diferença de AG':'#a78bfa'};
+const DEPT_C = {Entrega:'#2d7ef7', Armazém:'#f59e0b', Puxada:'#22c55e', 'Erro de Programação':'#d97706', 'Diferença de AG':'#a78bfa'};
 
 // ═══════════════════════════════════════════════════════
 // STATE
@@ -1578,7 +1578,7 @@ function renderRHLTable(containerId, linhas, base, ano, mesAte, getV, getVM, get
     const dept=def?.dept||'';
     if (dept!==lastDept) {
       lastDept=dept;
-      const deptClr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+      const deptClr=DEPT_C[dept]||'#a78bfa';
       html+=`<tr><td colspan="${4+getMs(mesAte).length}" style="padding:10px 12px 4px;background:var(--s1)">
         <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr};display:inline-flex;align-items:center;gap:6px">
           <span style="width:6px;height:6px;border-radius:50%;background:${deptClr};display:inline-block"></span>${dept}
@@ -1853,7 +1853,7 @@ function renderRHLComparativo() {
     const dept=def?.dept||'';
     if(dept!==lastDept){
       lastDept=dept;
-      const deptClr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+      const deptClr=DEPT_C[dept]||'#a78bfa';
       html+=`<tr><td colspan="6" style="padding:7px 14px;background:var(--s2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
         <span style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr}">${dept}</span>
       </td></tr>`;
