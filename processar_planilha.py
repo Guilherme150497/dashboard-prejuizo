@@ -327,11 +327,12 @@ def sf_cell(v):
 idx_pm,idx_lp,idx_ab=[],[],[]
 for i,row in enumerate(rows_vr):
     if not row or len(row)<3: continue
-    bv=str(row[0] or '').upper().strip()
+    # testa coluna A (índice 0) e coluna B (índice 1) — planilha pode usar qualquer uma
+    bv=' '.join(str(row[c] or '') for c in range(min(3,len(row)))).upper().strip()
     if not bv: continue
-    if 'PARA DE MINAS' in bv or 'COBEB PM' in bv: idx_pm.append(i)
-    elif 'LAGOA' in bv or 'COBEB LP' in bv:       idx_lp.append(i)
-    elif 'RDC' in bv or 'ABAET' in bv:            idx_ab.append(i)
+    if 'PARA DE MINAS' in bv or 'COBEB PM' in bv or 'TT PM' in bv: idx_pm.append(i)
+    elif 'LAGOA' in bv or 'COBEB LP' in bv or 'TT LP' in bv:       idx_lp.append(i)
+    elif 'RDC' in bv or 'ABAET' in bv or 'TT AB' in bv:            idx_ab.append(i)
 print(f"   VOLUME_REAL idx: PM={idx_pm}, LP={idx_lp}, AB={idx_ab}")
 
 # Tabela 1 — Volume Venda (primeira ocorrência de cada base)

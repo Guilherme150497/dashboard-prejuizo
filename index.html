@@ -1641,12 +1641,19 @@ function renderRHL() {
     ${DEPTS.map(d=>{
       const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(n)));
       const brl=sumBRL2(ls,base,ano,mesAte);
+      const metaBRL=ls.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
       const rhl=totVol>0?brl/totVol:0;
+      const metaRHL=totVol>0?metaBRL/totVol:0;
+      const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima':'▼ abaixo'):'';
+      const clrSim=metaRHL>0?(rhl>metaRHL?'var(--red)':'var(--green)'):'';
       const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
       return`<div class="kpi ${clr}">
         <div class="kpi-label">R$/HL ${d}</div>
         <div class="kpi-value">${fmtRHL(rhl)}</div>
-        <div class="kpi-sub">${fmtBRL(brl)} prejuízo</div>
+        <div class="kpi-sub" style="display:flex;flex-direction:column;gap:2px">
+          <span>Meta: ${metaRHL>0?fmtRHL(metaRHL):'—'} ${metaRHL>0?`<span style="color:${clrSim};font-weight:700">${simbolo}</span>`:''}</span>
+          <span style="color:var(--muted)">${fmtBRL(brl)} prejuízo</span>
+        </div>
       </div>`;
     }).join('')}
   `;
@@ -1707,12 +1714,20 @@ function renderRHLPuxado() {
     ${DEPTS.map(d=>{
       const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(n)));
       const brl=sumBRL2(ls,base,ano,mesAte);
+      const metaBRL=ls.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
       const rhl=totVol>0?brl/totVol:0;
+      const metaRHL=totVol>0?metaBRL/totVol:0;
+      const ok=metaRHL>0&&rhl<=metaRHL;
+      const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima':'▼ abaixo'):'';
+      const clrSim=metaRHL>0?(rhl>metaRHL?'var(--red)':'var(--green)'):'';
       const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
       return`<div class="kpi ${clr}">
         <div class="kpi-label">R$/HL Puxado ${d}</div>
         <div class="kpi-value">${semDados?'—':fmtRHL(rhl)}</div>
-        <div class="kpi-sub">${fmtBRL(brl)} prejuízo</div>
+        <div class="kpi-sub" style="display:flex;flex-direction:column;gap:2px">
+          <span>Meta: ${metaRHL>0?fmtRHL(metaRHL):'—'} ${metaRHL>0?`<span style="color:${clrSim};font-weight:700">${simbolo}</span>`:''}</span>
+          <span style="color:var(--muted)">${fmtBRL(brl)} prejuízo</span>
+        </div>
       </div>`;
     }).join('')}
   `;
