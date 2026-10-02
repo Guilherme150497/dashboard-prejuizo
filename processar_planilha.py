@@ -161,15 +161,7 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     if dt.year < NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month < NOVA_FONTE_MES: continue
 
-    # Col J — Status Solicitação: somente "Aprovada"
-    status_sol = str(row[9] or '').strip()
-    if status_sol != 'Aprovada': continue
-
-    # Col O — Status NF: somente "E" ou VAZIO (excluir "D")
-    status_nf = str(row[14] or '').strip()
-    if status_nf == 'D': continue
-
-    # Col X — Justificativa: excluir se contiver "Falta de Produto"
+    # Col X (idx 23) — Justificativa: excluir se contiver "Falta de Produto"
     justificativa = str(row[23] or '').strip()
     if 'Falta de Produto' in justificativa: continue
 
@@ -182,14 +174,13 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     else:
         continue  # ignora linhas sem sistema reconhecido
 
-    vl = sf(row[20])   # Col U — valor/custo
+    vl = sf(row[21])   # Col V (idx 21) — Valor total (não Valor Unitário)
     if vl <= 0: continue
 
-    # Col P (idx 15) — código produto, Col Q (idx 16) — descrição produto
-    # Col R (idx 17) — quantidade, Col AJ (idx 35) — motorista
-    cod_prod  = int(row[15]) if isinstance(row[15],(int,float)) else None
-    prod      = str(row[16] or '').strip()   # Col Q = descrição produto
-    motorista = str(row[35] or '').strip()   # Col AJ = motorista
+    # Col AA (idx 26) — código produto, Col AB (idx 27) — descrição produto
+    cod_prod = int(row[26]) if isinstance(row[26],(int,float)) else None
+    prod     = str(row[27] or '').strip()
+    motorista = str(row[35] or '').strip()  # Col AJ (idx 35) — Nome Motorista
 
     add(data, linha, base, dt.year, dt.month, vl)
     if prod and vl:
@@ -199,7 +190,7 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
             'linha': linha, 'prod': prod,
             'brl': round(vl, 2), 'hl': 0.0,
             'marca': info.get('marca',''), 'embal': info.get('embal',''),
-            'motorista': motorista if linha == 'Reposição Entrega' else ''
+            'motorista': motorista
         })
     n_nova += 1
     if n_nova % 10000 == 0: print(f"   {n_nova:,} linhas 03.18.05...")
@@ -265,31 +256,30 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     if dt.year == NOVA_FONTE_ANO and dt.month < NOVA_FONTE_MES: continue
 
     # Filtros
-    if str(row[9] or '').strip() != 'Aprovada': continue
-    if str(row[14] or '').strip() == 'D': continue
     if 'Falta de Produto' in str(row[23] or ''): continue
 
     sistema = str(row[63] or '').strip()
     if sistema == 'Promax':
         linha = 'Reposição Entrega'
-    elif sistema == 'Force':
+    elif sistema in ('Force', 'Customer'):
         linha = 'Trocas Mercado (RN)'
     else:
         continue
 
-    vl = sf(row[20])
+    vl = sf(row[21])   # Col V (idx 21) — Valor total
     if vl <= 0: continue
 
-    cod_prod = int(row[15]) if isinstance(row[15],(int,float)) else None
-    prod     = str(row[17] or '').strip()
-    ds       = dt.strftime('%Y-%m-%d')
-    info     = lookup.get(cod_prod, {}) if cod_prod else {}
+    cod_prod  = int(row[26]) if isinstance(row[26],(int,float)) else None
+    prod      = str(row[27] or '').strip()
+    motorista = str(row[35] or '').strip()  # Col AJ — Nome Motorista
+    ds        = dt.strftime('%Y-%m-%d')
+    info      = lookup.get(cod_prod, {}) if cod_prod else {}
 
     rawDiario.append({
         'base': base, 'data': ds, 'linha': linha,
         'brl': round(vl, 2), 'hl': 0.0,
         'prod': prod, 'marca': info.get('marca',''), 'embal': info.get('embal',''),
-        'wqi': False, 'op': 0
+        'wqi': False, 'op': 0, 'motorista': motorista
     })
     n_dnova += 1
 print(f"   ✓ {n_dnova} registros diários 03.18.05")
@@ -298,13 +288,14 @@ print(f"   ✓ {n_dnova} registros diários 03.18.05")
 print("📊 Lendo BASE_METAS...")
 SKIP={'entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','meta','janeiro',''}
 rows_bm=list(wb2['BASE_METAS'].iter_rows(min_row=1,max_row=35,values_only=True))
-vol_pm=[float(rows_bm[2][6+m] or 0) for m in range(12)]
-vol_lp=[float(rows_bm[3][6+m] or 0) for m in range(12)]
-vol_ab=[float(rows_bm[4][6+m] or 0) for m in range(12)]
+vol_pm=[float(rows_bm[2][5+m] or 0) for m in range(12)]
+vol_lp=[float(rows_bm[3][5+m] or 0) for m in range(12)]
+vol_ab=[float(rows_bm[4][5+m] or 0) for m in range(12)]
 metas={}
 for ri in range(6,len(rows_bm)):
     row=rows_bm[ri]; nome=str(row[4] or '').strip()
-    # Erro de Programação não tem meta — nunca mapear outra linha para ele
+    # Na BASE_METAS, 'Diferença de AG' representa 'Erro de Programação'
+    if nome == 'Diferença de AG': nome = 'Erro de Programação'
     if not nome or nome.lower() in SKIP or nome not in ALL_LINHAS: continue
     for m in range(12):
         for bk,taxa,vol in [('COBEB PM',float(row[5] or 0),vol_pm),
