@@ -185,9 +185,11 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     vl = sf(row[20])   # Col U — valor/custo
     if vl <= 0: continue
 
-    # Col P (idx 15) — código produto, Col R (idx 17) — descrição produto
-    cod_prod = int(row[15]) if isinstance(row[15],(int,float)) else None
-    prod     = str(row[17] or '').strip()
+    # Col P (idx 15) — código produto, Col Q (idx 16) — descrição produto
+    # Col R (idx 17) — quantidade, Col AJ (idx 35) — motorista
+    cod_prod  = int(row[15]) if isinstance(row[15],(int,float)) else None
+    prod      = str(row[16] or '').strip()   # Col Q = descrição produto
+    motorista = str(row[35] or '').strip()   # Col AJ = motorista
 
     add(data, linha, base, dt.year, dt.month, vl)
     if prod and vl:
@@ -196,7 +198,8 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
             'base': base, 'ano': dt.year, 'mes': dt.month,
             'linha': linha, 'prod': prod,
             'brl': round(vl, 2), 'hl': 0.0,
-            'marca': info.get('marca',''), 'embal': info.get('embal','')
+            'marca': info.get('marca',''), 'embal': info.get('embal',''),
+            'motorista': motorista if linha == 'Reposição Entrega' else ''
         })
     n_nova += 1
     if n_nova % 10000 == 0: print(f"   {n_nova:,} linhas 03.18.05...")

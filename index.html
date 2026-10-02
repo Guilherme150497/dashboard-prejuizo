@@ -327,6 +327,12 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
         <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-hl-prod"></canvas></div></div>
       </div>
     </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div><div class="panel-title">Reposição Entrega — por Motorista</div><div class="panel-sub">Ranking de R$ de reposição por motorista · Set/2026+</div></div>
+      </div>
+      <div class="panel-body no-pad"><div class="tw" id="t-hl-motorista"></div></div>
+    </div>
   </div>
 
   <!-- ══ VISÃO R$/HL ══ -->
@@ -1180,12 +1186,62 @@ function parseLookup(wb) {
   console.log(`Lookup: ${Object.keys(S.lookup).length} produtos`);
 }
 
+function parse031805(wb) {
+  // 03.18.05 — Reposição Entrega e Trocas Mercado (RN) a partir de Set/2026
+  const NOVA_ANO=2026, NOVA_MES=9;
+  const sn = wb.SheetNames.find(n => n==='03.18.05');
+  if (!sn) return;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null, raw:true});
+  let n=0;
+  rows.slice(1).forEach(row => {
+    const base = normBase(row[0]);
+    if (!base) return;
+    const dt = parseDate(row[7]); // Col H = data
+    if (!dt) return;
+    const ano=dt.getFullYear(), mes=dt.getMonth()+1;
+    if (ano < NOVA_ANO || (ano===NOVA_ANO && mes < NOVA_MES)) return;
+    const statusSol = String(row[9]||'').trim();
+    if (statusSol !== 'Aprovada') return;
+    const statusNF = String(row[14]||'').trim();
+    if (statusNF === 'D') return;
+    const justif = String(row[23]||'').trim();
+    if (justif.includes('Falta de Produto')) return;
+    const sistema = String(row[63]||'').trim();
+    let linha;
+    if (sistema==='Promax') linha='Reposição Entrega';
+    else if (sistema==='Force') linha='Trocas Mercado (RN)';
+    else return;
+    const vl = typeof row[20]==='number' ? row[20] : parseFloat(row[20])||0;
+    if (vl<=0) return;
+    addData(linha, base, ano, mes, vl);
+    const prod = String(row[16]||'').trim(); // Col Q = descrição produto
+    const motorista = linha==='Reposição Entrega' ? String(row[35]||'').trim() : ''; // Col AJ
+    if (prod) {
+      const codProd = typeof row[15]==='number' ? Math.round(row[15]) : 0;
+      const info = S.lookup[codProd]||{};
+      S.rawProd.push({base, ano, mes, linha, prod,
+        brl:Math.round(vl*100)/100, hl:0,
+        marca:info.marca||'', embal:info.embal||'',
+        motorista});
+    }
+    // Diário
+    const d=dt.getDate();
+    const dataStr=`${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    S.rawDiario.push({base, data:dataStr, linha,
+      brl:Math.round(vl*100)/100, hl:0,
+      prod, marca:'', embal:'', wqi:false, op:0, motorista});
+    n++;
+  });
+  console.log(`03.18.05: ${n} linhas (Set/2026+)`);
+}
+
 function parseAll(wb) {
   S.data={}; S.metas={}; S.vol={}; S.volPuxado={}; S.rawProd=[]; S.rawDiario=[]; S.wqiMeta={}; S.wqiMensal={}; S.wqiDiario={}; S.lookup={};
   parseLookup(wb);
   parse0317mensal(wb);
   parse0317diaria(wb);
   parse032801(wb);
+  parse031805(wb);
   parseMetas(wb);
   parseVol(wb);
   parseVolPuxado(wb);
@@ -1491,40 +1547,97 @@ function renderHL() {
   const linhas=ALL_NOMES.filter(n=>df==='ALL'||NOME_TO_DEF[n].dept===df);
 
   let totHL=0; linhas.forEach(n=>totHL+=sumHL(n,base,ano,mesAte));
+
+  // KPI cards por departamento — mesmo layout do R$/HL
   document.getElementById('kpi-hl').innerHTML=`
-    <div class="kpi blue">
+    <div class="kpi blue" style="display:flex;flex-direction:column;gap:6px">
       <div class="kpi-label">Total HL Perdido</div>
       <div class="kpi-value">${fmtHL(totHL)} HL</div>
       <div class="kpi-sub">Acumulado até ${MESES[mesAte-1]}/${ano}</div>
     </div>
     ${DEPTS.map(d=>{
       let s=0; ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d).forEach(n=>s+=sumHL(n,base,ano,mesAte));
-      const clr=d==='Entrega'?'amber':d==='Armazém'?'red':'green';
-      const pct=totHL>0?(s/totHL*100).toFixed(1)+'%':'—';
-      return`<div class="kpi ${clr}">
-        <div class="kpi-label">${d}</div>
+      const pct=totHL>0?s/totHL:0;
+      const barClr=pct>0.5?'var(--red)':pct>0.25?'var(--amber)':'var(--green)';
+      const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
+      const prev=totHL>0?(pct*100).toFixed(1)+'%':'—';
+      const simClr=pct>0.5?'var(--red)':pct>0.25?'var(--amber)':'var(--green)';
+      return`<div class="kpi ${clr}" style="display:flex;flex-direction:column;gap:6px">
+        <div class="kpi-label">HL ${d}</div>
         <div class="kpi-value">${fmtHL(s)} HL</div>
-        <div class="kpi-sub">${pct} do total</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="height:4px;background:var(--s1);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(pct*100,100)}%;background:${barClr};border-radius:2px;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:10px;color:var(--muted)">${prev} do total</span>
+            <span style="font-size:10px;font-weight:700;color:${simClr}">${pct>0.5?'▲ alto impacto':pct>0.25?'▲ médio':'▼ baixo'}</span>
+          </div>
+        </div>
       </div>`;
     }).join('')}
   `;
 
-  let html=`<table><thead><tr><th class="left">Linha</th><th>Acumulado HL</th>${getMs(mesAte).map(m=>`<th>${MESES[m-1]}</th>`).join('')}</tr></thead><tbody>`;
+  // Tabela com "barrilhas" — heatmap de cor por intensidade de valor
   const allHL=linhas.map(n=>sumHL(n,base,ano,mesAte));
   const maxHL=Math.max(...allHL,0.0001);
+
+  // Máximo por coluna de mês para coloração relativa
+  const msList=getMs(mesAte);
+  const maxByMes=msList.map(m=>{
+    let mx=0; linhas.forEach(n=>{const v=getHL(n,base,ano,m);if(v>mx)mx=v;}); return mx||0.0001;
+  });
+
+  function heatColor(v,maxV) {
+    if(!v||v<=0) return null;
+    const p=v/maxV;
+    if(p>=0.8) return {bg:'rgba(248,81,73,.22)',clr:'#ff8080'};
+    if(p>=0.6) return {bg:'rgba(240,163,10,.18)',clr:'#f59e0b'};
+    if(p>=0.4) return {bg:'rgba(240,163,10,.10)',clr:'#fbbf24'};
+    if(p>=0.2) return {bg:'rgba(45,126,247,.12)',clr:'#7ab4ff'};
+    return {bg:'transparent',clr:'var(--muted)'};
+  }
+
+  let html=`<table><thead><tr>
+    <th class="left" style="min-width:160px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)"><span style="width:3px;height:14px;background:var(--accent);border-radius:2px;display:inline-block"></span>Linha</span></th>
+    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Acumulado HL</span></th>
+    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">% do Total</span></th>
+    ${msList.map(m=>`<th><span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--muted)">${MESES[m-1].slice(0,3).toUpperCase()}</span></th>`).join('')}
+  </tr></thead><tbody>`;
+
+  let lastDept='';
   linhas.forEach((nome,idx)=>{
+    const def=NOME_TO_DEF[nome];
+    const dept=def?.dept||'';
+    if(dept!==lastDept){
+      lastDept=dept;
+      const deptClr=DEPT_C[dept]||'#a78bfa';
+      html+=`<tr><td colspan="${3+msList.length}" style="padding:10px 12px 4px;background:var(--s1)">
+        <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr};display:inline-flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${deptClr};display:inline-block"></span>${dept}
+        </span>
+      </td></tr>`;
+    }
     const acum=allHL[idx];
-    const pct=acum/maxHL;
-    const clr=pct>0.7?'var(--red)':pct>0.3?'var(--amber)':'var(--text)';
-    const ms=MESES.slice(0,mesAte).map((_,i)=>{
-      const v=getHL(nome,base,ano,i+1);
-      return`<td style="color:${v>0?'var(--blue)':'var(--muted)'}">${v>0?fmtHL(v):'-'}</td>`;
+    const pctAcum=totHL>0?acum/totHL:0;
+    const acumHC=heatColor(acum,maxHL);
+    const ms=msList.map((m,mi)=>{
+      const v=getHL(nome,base,ano,m);
+      const hc=heatColor(v,maxByMes[mi]);
+      if(!v||v<=0) return`<td style="color:var(--muted);font-size:11px;text-align:center">—</td>`;
+      return`<td title="${fmtHL(v)} HL" style="background:${hc?hc.bg:'transparent'};color:${hc?hc.clr:'var(--muted)'};font-size:11px;font-weight:600;text-align:center;border-radius:3px">${fmtHL(v)}</td>`;
     }).join('');
-    html+=`<tr><td class="left">${nome}</td><td style="font-weight:600;color:${clr}">${fmtHL(acum)}</td>${ms}</tr>`;
+    html+=`<tr>
+      <td class="left" style="font-size:12px;font-weight:500">${nome}</td>
+      <td style="background:${acumHC?acumHC.bg:'transparent'};color:${acumHC?acumHC.clr:'var(--muted)'};font-size:12px;font-weight:700;border-radius:3px">${acum>0?fmtHL(acum):'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${acum>0?(pctAcum*100).toFixed(1)+'%':'—'}</td>
+      ${ms}
+    </tr>`;
   });
   html+='</tbody></table>';
   document.getElementById('t-hl').innerHTML=html;
   renderHLChart();
+  renderHLMotorista();
 }
 
 function renderHLChart() {
@@ -1532,19 +1645,26 @@ function renderHLChart() {
   const linhaF_arr=msGetValues('ms-linha-hl');
   const linhas=linhaF_arr.includes('ALL')?ALL_NOMES:ALL_NOMES.filter(n=>linhaF_arr.includes(n));
 
-  const mesesSel = S.mesesSel||Array.from({length:mesAte},(_,i)=>i+1);
   const data=getMs(mesAte).map(m=>{let s=0;linhas.forEach(n=>s+=getHL(n,base,ano,m));return s;});
   dchart('c-hl-linha'); const c=get('c-hl-linha').getContext('2d');
-  CH['c-hl-linha']=new Chart(c,{type:'line',data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{label:'HL',data,borderColor:'#2d7ef7',backgroundColor:'rgba(88,166,255,.1)',tension:.4,fill:true}]},options:{...coBase(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`}}}}});
+  CH['c-hl-linha']=new Chart(c,{type:'line',data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{label:'HL',data,borderColor:'#2d7ef7',backgroundColor:'rgba(88,166,255,.1)',tension:.4,fill:true,pointRadius:5,pointBackgroundColor:'#2d7ef7',pointBorderColor:'#0c0f14',pointBorderWidth:2}]},options:{...coBase(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#2d7ef7',borderColor:'#1c2333',borderWidth:1}}}});
 
-  // Top 10 produtos HL
+  // Top 10 produtos HL (rawProd tem HL apenas para linhas com HL — Reposição/Trocas = 0)
   const prodMapHL={};
-  S.rawProd.filter(r=>(base==='ALL'||r.base===base)&&r.ano===ano&&r.mes<=mesAte&&mesesSel.includes(r.mes)&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)))
+  S.rawProd.filter(r=>(base==='ALL'||r.base===base)&&r.ano===ano&&r.mes<=mesAte&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha))&&r.hl>0)
     .forEach(r=>{prodMapHL[r.prod]=(prodMapHL[r.prod]||0)+r.hl;});
   const sortedHL=Object.entries(prodMapHL).sort((a,b)=>b[1]-a[1]).slice(0,10);
   document.getElementById('hl-prod-sub').textContent = linhaF_arr.includes('ALL')?'Todas as linhas':linhaF_arr.join(', ');
   dchart('c-hl-prod'); const cp=get('c-hl-prod').getContext('2d');
-  const hlColors=sortedHL.map((_,i)=>{const p=i/sortedHL.length;return p<0.3?'rgba(248,81,73,.8)':p<0.6?'rgba(240,163,10,.8)':'rgba(88,166,255,.8)';});
+  const hlColors=sortedHL.map((_,i)=>{const p=i/Math.max(sortedHL.length-1,1);return p<0.33?'rgba(248,81,73,.85)':p<0.66?'rgba(240,163,10,.85)':'rgba(45,126,247,.8)';});
+  if(sortedHL.length===0){
+    get('c-hl-prod').style.display='none';
+    const par=get('c-hl-prod').parentNode;
+    if(!par.querySelector('.no-data-msg')){const m=document.createElement('div');m.className='no-data-msg';m.style.cssText='padding:40px;text-align:center;color:var(--muted);font-size:13px';m.textContent='Sem dados de produto HL (Reposição/Trocas não têm HL)';par.appendChild(m);}
+    return;
+  }
+  get('c-hl-prod').style.display='';
+  get('c-hl-prod').parentNode.querySelector('.no-data-msg')?.remove();
   CH['c-hl-prod']=new Chart(cp,{
     type:'bar',
     data:{
@@ -1559,11 +1679,63 @@ function renderHLChart() {
         datalabels:{display:false}
       },
       scales:{
-        x:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(2)+'HL'},grid:{color:'rgba(48,54,61,.4)'}},
+        x:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(2)+' HL'},grid:{color:'rgba(48,54,61,.4)'}},
         y:{ticks:{color:'#e2e8f4',font:{size:11}},grid:{display:false}}
       }
     }
   });
+}
+
+function renderHLMotorista() {
+  const {base,ano,mesAte}=S;
+  const el=get('t-hl-motorista');
+  if(!el) return;
+  // Filtra rawProd para Reposição Entrega com motorista preenchido
+  const filtered=S.rawProd.filter(r=>
+    r.linha==='Reposição Entrega' &&
+    r.motorista &&
+    r.motorista.trim() &&
+    (base==='ALL'||r.base===base) &&
+    r.ano===ano && r.mes<=mesAte
+  );
+  if(!filtered.length){
+    el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Sem dados de motorista disponíveis<br><small>Disponível após Set/2026 com planilha 03.18.05</small></div>`;
+    return;
+  }
+  const byMot={};
+  filtered.forEach(r=>{
+    const m=r.motorista.trim();
+    byMot[m]=byMot[m]||{brl:0,ocorr:0,meses:new Set()};
+    byMot[m].brl+=r.brl; byMot[m].ocorr++;
+    byMot[m].meses.add(r.mes);
+  });
+  const sorted=Object.entries(byMot).map(([m,v])=>({mot:m,...v,meses:v.meses.size})).sort((a,b)=>b.brl-a.brl);
+  const maxBRL=sorted[0]?.brl||1;
+  el.innerHTML=`<table><thead><tr>
+    <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)"># Motorista</th>
+    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">R$ Reposição</th>
+    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">Ocorrências</th>
+    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">Meses</th>
+    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);min-width:120px">Impacto</th>
+  </tr></thead><tbody>
+  ${sorted.map((r,i)=>{
+    const p=r.brl/maxBRL;
+    const bg=p>=0.8?'rgba(248,81,73,.18)':p>=0.5?'rgba(240,163,10,.14)':p>=0.25?'rgba(45,126,247,.10)':'transparent';
+    const clr=p>=0.8?'#ff8080':p>=0.5?'#f59e0b':p>=0.25?'#7ab4ff':'var(--muted)';
+    const barW=Math.round(p*100);
+    return`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 12px;text-align:left;font-size:12px;font-weight:500;color:var(--text)"><span style="color:var(--muted);font-size:10px;margin-right:6px">${i+1}</span>${r.mot}</td>
+      <td style="padding:8px 12px;background:${bg};color:${clr};font-weight:700;font-size:12px;border-radius:3px">${fmtBRL(r.brl)}</td>
+      <td style="padding:8px 12px;text-align:center;color:var(--text);font-size:12px">${r.ocorr}</td>
+      <td style="padding:8px 12px;text-align:center;color:var(--muted);font-size:12px">${r.meses}</td>
+      <td style="padding:8px 12px">
+        <div style="height:6px;background:var(--s1);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${barW}%;background:${clr};border-radius:3px"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
 }
 
 // ═══════════════════════════════════════════════════════
