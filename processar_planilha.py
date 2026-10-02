@@ -69,6 +69,7 @@ print(f"📂 Abrindo {ARQUIVO}...")
 try:
     wb  = load_workbook(ARQUIVO, read_only=True, data_only=True)
     wb2 = load_workbook(ARQUIVO, read_only=True)
+    print(f"   Abas encontradas: {wb.sheetnames}")
 except FileNotFoundError:
     print(f"❌ Arquivo '{ARQUIVO}' não encontrado!")
     print("   Coloque este script na mesma pasta da planilha.")
@@ -286,21 +287,37 @@ print(f"   ✓ {n_dnova} registros diários 03.18.05")
 
 # Metas
 print("📊 Lendo BASE_METAS...")
-SKIP={'entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','meta','janeiro',''}
-rows_bm=list(wb2['BASE_METAS'].iter_rows(min_row=1,max_row=35,values_only=True))
-vol_pm=[float(rows_bm[2][5+m] or 0) for m in range(12)]
-vol_lp=[float(rows_bm[3][5+m] or 0) for m in range(12)]
-vol_ab=[float(rows_bm[4][5+m] or 0) for m in range(12)]
+SKIP={'entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total',
+      'meta','janeiro','volume pm','volume lp','volume ab','volume tt pm','volume tt lp','volume tt ab',
+      'pm','lp','ab','rdc abaete',''}
+rows_bm=list(wb2['BASE_METAS'].iter_rows(min_row=1,values_only=True))
+
+def _flt(v):
+    try: return float(v or 0)
+    except: return 0.0
+
+# Busca linhas de volume por label (coluna E = idx 4)
+vol_pm=[0.0]*12; vol_lp=[0.0]*12; vol_ab=[0.0]*12
+for row in rows_bm:
+    lbl=str(row[4] or '').strip().lower()
+    if any(x in lbl for x in ('volume tt pm','cobeb pm','volume pm')) or lbl=='pm':
+        vol_pm=[_flt(row[5+m]) for m in range(12)]
+    elif any(x in lbl for x in ('volume tt lp','cobeb lp','volume lp')) or lbl=='lp':
+        vol_lp=[_flt(row[5+m]) for m in range(12)]
+    elif any(x in lbl for x in ('volume tt ab','rdc ab','volume ab','abaet')) or lbl=='ab':
+        vol_ab=[_flt(row[5+m]) for m in range(12)]
+
+print(f"   Volumes PM Jan: {vol_pm[0]}, LP Jan: {vol_lp[0]}, AB Jan: {vol_ab[0]}")
+
 metas={}
-for ri in range(6,len(rows_bm)):
-    row=rows_bm[ri]; nome=str(row[4] or '').strip()
-    # Na BASE_METAS, 'Diferença de AG' representa 'Erro de Programação'
+for row in rows_bm:
+    nome=str(row[4] or '').strip()
     if nome == 'Diferença de AG': nome = 'Erro de Programação'
     if not nome or nome.lower() in SKIP or nome not in ALL_LINHAS: continue
     for m in range(12):
-        for bk,taxa,vol in [('COBEB PM',float(row[5] or 0),vol_pm),
-                            ('COBEB LP',float(row[6] or 0),vol_lp),
-                            ('RDC ABAETÉ',float(row[7] or 0),vol_ab)]:
+        for bk,taxa,vol in [('COBEB PM',_flt(row[5]),vol_pm),
+                            ('COBEB LP',_flt(row[6]),vol_lp),
+                            ('RDC ABAETÉ',_flt(row[7]),vol_ab)]:
             v=round(taxa*vol[m],2)
             if v<=0: continue
             for ano in [2025,2026]:
