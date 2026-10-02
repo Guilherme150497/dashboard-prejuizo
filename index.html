@@ -1233,7 +1233,7 @@ function parse031805(wb) {
     if (sistema==='Promax') linha='Reposição Entrega';
     else if (sistema==='Force'||sistema==='Customer') linha='Trocas Mercado (RN)';
     else return;
-    const vl = typeof row[20]==='number' ? row[20] : parseFloat(row[20])||0;
+    const vl = typeof row[21]==='number' ? row[21] : parseFloat(row[21])||0; // Col V = Valor (não Valor Unitário)
     if (vl<=0) return;
     addData(linha, base, ano, mes, vl);
     const prod = String(row[16]||'').trim(); // Col Q = descrição produto
