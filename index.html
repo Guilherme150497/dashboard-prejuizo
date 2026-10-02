@@ -1209,7 +1209,7 @@ function parse031805(wb) {
     const sistema = String(row[63]||'').trim();
     let linha;
     if (sistema==='Promax') linha='Reposição Entrega';
-    else if (sistema==='Force') linha='Trocas Mercado (RN)';
+    else if (sistema==='Force'||sistema==='Customer') linha='Trocas Mercado (RN)';
     else return;
     const vl = typeof row[20]==='number' ? row[20] : parseFloat(row[20])||0;
     if (vl<=0) return;

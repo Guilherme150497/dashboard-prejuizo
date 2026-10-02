@@ -177,7 +177,7 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     sistema = str(row[63] or '').strip()
     if sistema == 'Promax':
         linha = 'Reposição Entrega'
-    elif sistema == 'Force':
+    elif sistema in ('Force', 'Customer'):
         linha = 'Trocas Mercado (RN)'
     else:
         continue  # ignora linhas sem sistema reconhecido
