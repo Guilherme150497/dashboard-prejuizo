@@ -329,7 +329,7 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     </div>
     <div class="panel">
       <div class="panel-head">
-        <div><div class="panel-title">Reposição Entrega — por Motorista</div><div class="panel-sub">Ranking de R$ de reposição por motorista · Set/2026+</div></div>
+        <div><div class="panel-title">Reposição Entrega e Trocas — por Motorista</div><div class="panel-sub">Ranking de R$ por motorista · Set/2026+</div></div>
       </div>
       <div class="panel-body no-pad"><div class="tw" id="t-hl-motorista"></div></div>
     </div>
@@ -1136,22 +1136,23 @@ function parseMetas(wb) {
   if (rows.length < 3) return;
 
   // Encontra linhas de volume varrendo a coluna E (idx 4) pelos labels
+  // Volumes estão em colunas F–Q (idx 5–16), 12 meses
   let volPM=[],volLP=[],volAB=[];
   let firstMetaRow = 6; // fallback
   for (let i=0;i<rows.length;i++) {
     const lbl = String(rows[i][4]||'').trim().toLowerCase();
-    if (lbl.includes('cobeb pm') || lbl.includes('volume pm') || lbl==='pm') {
-      volPM = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
-    } else if (lbl.includes('cobeb lp') || lbl.includes('volume lp') || lbl==='lp') {
-      volLP = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
-    } else if (lbl.includes('abaeté') || lbl.includes('rdc ab') || lbl.includes('abaete') || lbl==='ab') {
-      volAB = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+    if (lbl.includes('volume tt pm') || lbl.includes('cobeb pm') || lbl.includes('volume pm') || lbl==='pm') {
+      volPM = Array.from({length:12}, (_,m) => flt(rows[i][5+m]));
+    } else if (lbl.includes('volume tt lp') || lbl.includes('cobeb lp') || lbl.includes('volume lp') || lbl==='lp') {
+      volLP = Array.from({length:12}, (_,m) => flt(rows[i][5+m]));
+    } else if (lbl.includes('volume tt ab') || lbl.includes('abaeté') || lbl.includes('rdc ab') || lbl.includes('abaete') || lbl==='ab') {
+      volAB = Array.from({length:12}, (_,m) => flt(rows[i][5+m]));
     }
   }
-  // Fallback: se não achou pelos labels, usa offsets antigos rows[2],[3],[4]
-  if (!volPM.length || volPM.every(v=>v===0)) volPM = Array.from({length:12}, (_,m) => flt((rows[2]||[])[6+m]));
-  if (!volLP.length || volLP.every(v=>v===0)) volLP = Array.from({length:12}, (_,m) => flt((rows[3]||[])[6+m]));
-  if (!volAB.length || volAB.every(v=>v===0)) volAB = Array.from({length:12}, (_,m) => flt((rows[4]||[])[6+m]));
+  // Fallback: se não achou pelos labels, usa offsets rows[2],[3],[4] col F (idx5)
+  if (!volPM.length || volPM.every(v=>v===0)) volPM = Array.from({length:12}, (_,m) => flt((rows[2]||[])[5+m]));
+  if (!volLP.length || volLP.every(v=>v===0)) volLP = Array.from({length:12}, (_,m) => flt((rows[3]||[])[5+m]));
+  if (!volAB.length || volAB.every(v=>v===0)) volAB = Array.from({length:12}, (_,m) => flt((rows[4]||[])[5+m]));
   console.log(`Vols META: PM Jan=${(volPM[0]||0).toFixed(0)} LP Jan=${(volLP[0]||0).toFixed(0)} AB Jan=${(volAB[0]||0).toFixed(0)}`);
 
   const SKIP = new Set(['entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total','meta','janeiro','volume pm','volume lp','volume ab','pm','lp','ab','']);
@@ -1236,7 +1237,7 @@ function parse031805(wb) {
     if (vl<=0) return;
     addData(linha, base, ano, mes, vl);
     const prod = String(row[16]||'').trim(); // Col Q = descrição produto
-    const motorista = linha==='Reposição Entrega' ? String(row[35]||'').trim() : ''; // Col AJ
+    const motorista = String(row[35]||'').trim(); // Col AJ — motorista (Reposição e Trocas)
     if (prod) {
       const codProd = typeof row[15]==='number' ? Math.round(row[15]) : 0;
       const info = S.lookup[codProd]||{};
@@ -1711,13 +1712,14 @@ function renderHLMotorista() {
   const {base,ano,mesAte}=S;
   const el=get('t-hl-motorista');
   if(!el) return;
-  // Filtra rawProd para Reposição Entrega com motorista preenchido
+  // Filtra rawProd para Reposição Entrega e Trocas com motorista preenchido
+  // Aceita qualquer ano >= ano selecionado (dados de 03.18.05 podem ser de ano posterior)
   const filtered=S.rawProd.filter(r=>
-    r.linha==='Reposição Entrega' &&
+    (r.linha==='Reposição Entrega'||r.linha==='Trocas Mercado (RN)') &&
     r.motorista &&
     r.motorista.trim() &&
     (base==='ALL'||r.base===base) &&
-    r.ano===ano && r.mes<=mesAte
+    r.ano>=ano
   );
   if(!filtered.length){
     el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Sem dados de motorista disponíveis<br><small>Disponível após Set/2026 com planilha 03.18.05</small></div>`;
@@ -1726,15 +1728,17 @@ function renderHLMotorista() {
   const byMot={};
   filtered.forEach(r=>{
     const m=r.motorista.trim();
-    byMot[m]=byMot[m]||{brl:0,ocorr:0,meses:new Set()};
+    byMot[m]=byMot[m]||{brl:0,ocorr:0,meses:new Set(),linhas:new Set()};
     byMot[m].brl+=r.brl; byMot[m].ocorr++;
-    byMot[m].meses.add(r.mes);
+    byMot[m].meses.add(`${r.ano}-${r.mes}`);
+    byMot[m].linhas.add(r.linha==='Reposição Entrega'?'Repos.':'Trocas');
   });
-  const sorted=Object.entries(byMot).map(([m,v])=>({mot:m,...v,meses:v.meses.size})).sort((a,b)=>b.brl-a.brl);
+  const sorted=Object.entries(byMot).map(([m,v])=>({mot:m,...v,meses:v.meses.size,linhas:[...v.linhas].join('+')})).sort((a,b)=>b.brl-a.brl);
   const maxBRL=sorted[0]?.brl||1;
   el.innerHTML=`<table><thead><tr>
     <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)"># Motorista</th>
-    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">R$ Reposição</th>
+    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">R$ Total</th>
+    <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">Linha(s)</th>
     <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">Ocorrências</th>
     <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">Meses</th>
     <th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);min-width:120px">Impacto</th>
@@ -1747,6 +1751,7 @@ function renderHLMotorista() {
     return`<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:8px 12px;text-align:left;font-size:12px;font-weight:500;color:var(--text)"><span style="color:var(--muted);font-size:10px;margin-right:6px">${i+1}</span>${r.mot}</td>
       <td style="padding:8px 12px;background:${bg};color:${clr};font-weight:700;font-size:12px;border-radius:3px">${fmtBRL(r.brl)}</td>
+      <td style="padding:8px 12px;text-align:center;color:var(--muted);font-size:11px">${r.linhas}</td>
       <td style="padding:8px 12px;text-align:center;color:var(--text);font-size:12px">${r.ocorr}</td>
       <td style="padding:8px 12px;text-align:center;color:var(--muted);font-size:12px">${r.meses}</td>
       <td style="padding:8px 12px">
@@ -2309,9 +2314,10 @@ function renderProd() {
   const map={};
   S.rawProd.filter(r=>
     (base==='ALL'||r.base===base) &&
-    r.ano===ano &&
-    r.mes<=mesAte &&
-    mesesSel.includes(r.mes) &&
+    // Inclui ano selecionado; para linhas vindas de 03.18.05 (031805 novas) aceita qualquer ano
+    (r.ano===ano || (r.ano > ano)) &&
+    (r.ano!==ano || r.mes<=mesAte) &&
+    (r.ano!==ano || mesesSel.includes(r.mes)) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
     (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
   ).forEach(r=>{
