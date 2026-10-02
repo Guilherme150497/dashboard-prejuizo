@@ -643,6 +643,7 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
         <option value="Entrega">Entrega</option>
         <option value="Armazém">Armazém</option>
         <option value="Puxada">Puxada</option>
+        <option value="Erro de Programação">Erro de Programação</option>
         <option value="Diferença de AG">Diferença de AG</option>
       </select>
     </div>
@@ -1085,6 +1086,11 @@ function parse0317diaria(wb) {
 }
 
 function parse032801(wb) {
+  // A partir de Set/2026, Reposição Entrega e Trocas são lidos da aba 03.18.05 (parse031805)
+  // Para evitar dupla contagem, ignorar dados >= Set/2026 nesta função
+  const NOVA_ANO=2026, NOVA_MES=9;
+  const isNovaPeriodo = (ano,mes) => ano > NOVA_ANO || (ano===NOVA_ANO && mes >= NOVA_MES);
+
   // Mensal
   const sn = wb.SheetNames.find(n => n==='03.05.28.01');
   if (sn) {
@@ -1095,6 +1101,7 @@ function parse032801(wb) {
       const dt   = parseDate(row[1]);
       if (!base || !dt) return;
       const mes = dt.getMonth()+1, ano = dt.getFullYear();
+      if (isNovaPeriodo(ano, mes)) return; // coberto por parse031805
       const vR = typeof row[4]==='number' ? row[4] : 0;
       const vT = [3,5,6,7,8,9,10].reduce((s,i)=>s+(typeof row[i]==='number'?row[i]:0),0);
       if (vR) addData('Reposição Entrega',   base, ano, mes, vR);
@@ -1110,7 +1117,9 @@ function parse032801(wb) {
       const base = normBase(row[0]);
       const dt   = parseDate(row[1]);
       if (!base || !dt) return;
-      const dataStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      const mes = dt.getMonth()+1, ano = dt.getFullYear();
+      if (isNovaPeriodo(ano, mes)) return; // coberto por parse031805
+      const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
       const vR = typeof row[4]==='number' ? row[4] : 0;
       const vT = [3,5,6,7,8,9,10].reduce((s,i)=>s+(typeof row[i]==='number'?row[i]:0),0);
       if (vR) S.rawDiario.push({base,data:dataStr,linha:'Reposição Entrega',   brl:Math.round(vR*100)/100,hl:0,prod:'',marca:'',embal:'',wqi:false,op:0});
@@ -1120,19 +1129,35 @@ function parse032801(wb) {
 }
 
 function parseMetas(wb) {
-  // BASE_METAS: row3=volPM(6-17), row4=volLP, row5=volAB; row8+=nome(4),taxaPM(5),LP(6),AB(7)
+  // BASE_METAS: busca linhas de volume por label na col E (idx 4), depois metas em rows com NOME_TO_DEF[nome]
   const sn = wb.SheetNames.find(n => n === 'BASE_METAS');
   if (!sn) return console.warn('BASE_METAS não encontrado');
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null, raw:true});
-  if (rows.length < 5) return;
-  const volPM = Array.from({length:12}, (_,m) => flt(rows[2][6+m]));
-  const volLP = Array.from({length:12}, (_,m) => flt(rows[3][6+m]));
-  const volAB = Array.from({length:12}, (_,m) => flt(rows[4][6+m]));
-  console.log(`Vols META: PM Jan=${volPM[0].toFixed(0)} LP Jan=${volLP[0].toFixed(0)} AB Jan=${volAB[0].toFixed(0)}`);
-  const SKIP = new Set(['entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total','meta','janeiro','']);
-  rows.slice(6).forEach((row,ri) => {
+  if (rows.length < 3) return;
+
+  // Encontra linhas de volume varrendo a coluna E (idx 4) pelos labels
+  let volPM=[],volLP=[],volAB=[];
+  let firstMetaRow = 6; // fallback
+  for (let i=0;i<rows.length;i++) {
+    const lbl = String(rows[i][4]||'').trim().toLowerCase();
+    if (lbl.includes('cobeb pm') || lbl.includes('volume pm') || lbl==='pm') {
+      volPM = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+    } else if (lbl.includes('cobeb lp') || lbl.includes('volume lp') || lbl==='lp') {
+      volLP = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+    } else if (lbl.includes('abaeté') || lbl.includes('rdc ab') || lbl.includes('abaete') || lbl==='ab') {
+      volAB = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+    }
+  }
+  // Fallback: se não achou pelos labels, usa offsets antigos rows[2],[3],[4]
+  if (!volPM.length || volPM.every(v=>v===0)) volPM = Array.from({length:12}, (_,m) => flt((rows[2]||[])[6+m]));
+  if (!volLP.length || volLP.every(v=>v===0)) volLP = Array.from({length:12}, (_,m) => flt((rows[3]||[])[6+m]));
+  if (!volAB.length || volAB.every(v=>v===0)) volAB = Array.from({length:12}, (_,m) => flt((rows[4]||[])[6+m]));
+  console.log(`Vols META: PM Jan=${(volPM[0]||0).toFixed(0)} LP Jan=${(volLP[0]||0).toFixed(0)} AB Jan=${(volAB[0]||0).toFixed(0)}`);
+
+  const SKIP = new Set(['entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total','meta','janeiro','volume pm','volume lp','volume ab','pm','lp','ab','']);
+  rows.slice(firstMetaRow).forEach((row) => {
     let nome = String(row[4]||'').trim();
-    // Erro de Programação NÃO tem meta — não mapear 'Diferença de AG' para ele
+    // Só processa linhas reconhecidas pelo NOME_TO_DEF
     if (!nome || SKIP.has(nome.toLowerCase()) || !NOME_TO_DEF[nome]) return;
     const tPM=flt(row[5]), tLP=flt(row[6]), tAB=flt(row[7]);
     for (let m=0; m<12; m++) {
@@ -1200,13 +1225,9 @@ function parse031805(wb) {
     if (!dt) return;
     const ano=dt.getFullYear(), mes=dt.getMonth()+1;
     if (ano < NOVA_ANO || (ano===NOVA_ANO && mes < NOVA_MES)) return;
-    const statusSol = String(row[9]||'').trim();
-    if (statusSol !== 'Aprovada') return;
-    const statusNF = String(row[14]||'').trim();
-    if (statusNF === 'D') return;
-    const justif = String(row[23]||'').trim();
+    const justif = String(row[23]||'').trim(); // Col X = Justificativa
     if (justif.includes('Falta de Produto')) return;
-    const sistema = String(row[63]||'').trim();
+    const sistema = String(row[63]||'').trim(); // Col BL = Sistema Origem
     let linha;
     if (sistema==='Promax') linha='Reposição Entrega';
     else if (sistema==='Force'||sistema==='Customer') linha='Trocas Mercado (RN)';
