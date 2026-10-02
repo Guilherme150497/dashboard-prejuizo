@@ -1236,10 +1236,10 @@ function parse031805(wb) {
     const vl = typeof row[21]==='number' ? row[21] : parseFloat(row[21])||0; // Col V = Valor (não Valor Unitário)
     if (vl<=0) return;
     addData(linha, base, ano, mes, vl);
-    const prod = String(row[16]||'').trim(); // Col Q = descrição produto
-    const motorista = String(row[35]||'').trim(); // Col AJ — motorista (Reposição e Trocas)
+    const prod = String(row[27]||'').trim(); // Col AB = Descrição produto
+    const motorista = String(row[35]||'').trim(); // Col AJ = Nome Motorista
     if (prod) {
-      const codProd = typeof row[15]==='number' ? Math.round(row[15]) : 0;
+      const codProd = typeof row[26]==='number' ? Math.round(row[26]) : 0; // Col AA = código produto
       const info = S.lookup[codProd]||{};
       S.rawProd.push({base, ano, mes, linha, prod,
         brl:Math.round(vl*100)/100, hl:0,
