@@ -321,26 +321,47 @@ print(f"   Volumes PM Jan: {vol_pm[0]:.0f}, LP Jan: {vol_lp[0]:.0f}, AB Jan: {vo
 # ── Metas por linha de prejuízo ───────────────────────────────────────────
 # Estrutura real: nome da linha em col E (idx 4), taxas em cols F/G/H (idx 5/6/7)
 metas={}
+# Linhas que têm meta como VALOR ABSOLUTO R$ por base (não taxa × volume)
+# EP e AG têm meta R$ direta — cols F/G/H são os valores mensais absolutos por base
+META_ABSOLUTA = {'Erro de Programação', 'Diferença de AG'}
+
 for row in rows_bm:
     if not row or len(row) < 6: continue
     nome = str(row[4] or '').strip()
-    if nome == 'Diferença de AG': nome = 'Erro de Programação'
+    # CORREÇÃO: não trocar nome de AG para EP — cada um tem sua meta própria
     if not nome or nome.lower() in SKIP: continue
     if nome not in ALL_LINHAS: continue
-    taxa_pm = _flt(row[5])
-    taxa_lp = _flt(row[6]) if len(row) > 6 else 0.0
-    taxa_ab = _flt(row[7]) if len(row) > 7 else 0.0
-    if taxa_pm == 0.0 and taxa_lp == 0.0 and taxa_ab == 0.0: continue
-    for m in range(12):
-        for bk, taxa, vol in [('COBEB PM', taxa_pm, vol_pm),
-                               ('COBEB LP', taxa_lp, vol_lp),
-                               ('RDC ABAETÉ', taxa_ab, vol_ab)]:
-            v = round(taxa * vol[m], 2)
-            if v <= 0: continue
-            for ano in [2025, 2026]:
-                metas.setdefault(nome, {}).setdefault(bk, {}).setdefault(ano, {})[m+1] = v
-                metas.setdefault(nome, {}).setdefault('ALL', {}).setdefault(ano, {})
-                metas[nome]['ALL'][ano][m+1] = round(metas[nome]['ALL'][ano].get(m+1, 0) + v, 2)
+
+    if nome in META_ABSOLUTA:
+        # Meta absoluta R$/mês: cols F=PM(idx5), G=LP(idx6), H=AB(idx7) são valores R$ diretos
+        # Se a planilha tiver valor único (total), distribui igualmente entre bases
+        val_pm = _flt(row[5])
+        val_lp = _flt(row[6]) if len(row) > 6 else 0.0
+        val_ab = _flt(row[7]) if len(row) > 7 else 0.0
+        if val_pm == 0.0 and val_lp == 0.0 and val_ab == 0.0: continue
+        for m in range(12):
+            for bk, val in [('COBEB PM', val_pm), ('COBEB LP', val_lp), ('RDC ABAETÉ', val_ab)]:
+                if val <= 0: continue
+                for ano in [2025, 2026]:
+                    metas.setdefault(nome, {}).setdefault(bk, {}).setdefault(ano, {})[m+1] = round(val, 2)
+                    metas.setdefault(nome, {}).setdefault('ALL', {}).setdefault(ano, {})
+                    metas[nome]['ALL'][ano][m+1] = round(metas[nome]['ALL'][ano].get(m+1, 0) + val, 2)
+    else:
+        # Meta como taxa × volume (comportamento padrão)
+        taxa_pm = _flt(row[5])
+        taxa_lp = _flt(row[6]) if len(row) > 6 else 0.0
+        taxa_ab = _flt(row[7]) if len(row) > 7 else 0.0
+        if taxa_pm == 0.0 and taxa_lp == 0.0 and taxa_ab == 0.0: continue
+        for m in range(12):
+            for bk, taxa, vol in [('COBEB PM', taxa_pm, vol_pm),
+                                   ('COBEB LP', taxa_lp, vol_lp),
+                                   ('RDC ABAETÉ', taxa_ab, vol_ab)]:
+                v = round(taxa * vol[m], 2)
+                if v <= 0: continue
+                for ano in [2025, 2026]:
+                    metas.setdefault(nome, {}).setdefault(bk, {}).setdefault(ano, {})[m+1] = v
+                    metas.setdefault(nome, {}).setdefault('ALL', {}).setdefault(ano, {})
+                    metas[nome]['ALL'][ano][m+1] = round(metas[nome]['ALL'][ano].get(m+1, 0) + v, 2)
 
 print(f"   {len(metas)} linhas de meta carregadas: {list(metas.keys())[:5]}")
 

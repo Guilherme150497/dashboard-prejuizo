@@ -192,6 +192,7 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
   <div class="sb-group">
     <div class="sb-label">Temporal</div>
     <div class="sb-item" onclick="nav('diario',this)"><span class="sb-icon">📅</span>Visão Diária</div>
+    <div class="sb-item" onclick="nav('mensal',this)"><span class="sb-icon">📆</span>Visão Mensal</div>
     <div class="sb-item" onclick="nav('tend',this)"><span class="sb-icon">📉</span>Tendências</div>
     <div class="sb-item" onclick="nav('axa',this)"><span class="sb-icon">📈</span>Ano x Ano</div>
   </div>
@@ -692,6 +693,38 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="panel">
       <div class="panel-head"><div><div class="pt">Tabela Diária</div><div class="ps">Clique em uma linha para ver os produtos do dia</div></div></div>
       <div class="panel-body no-pad"><div class="tw" id="t-diario"></div></div>
+    </div>
+  </div>
+
+  <!-- ══ VISÃO MENSAL ══ -->
+  <div class="section" id="s-mensal">
+    <div class="filter-row">
+      <span class="filter-label">Mês:</span>
+      <select id="sel-mensal-mes" onchange="renderMensal()"></select>
+      <span class="filter-label" style="margin-left:8px">Semana:</span>
+      <select id="sel-mensal-semana" onchange="renderMensal()">
+        <option value="ALL">Todas as semanas</option>
+      </select>
+      <div class="ms-wrap" id="ms-mensal-linha"><button class="ms-btn">Todas as linhas</button><div class="ms-dropdown"></div></div>
+      <select id="sel-mensal-dept" onchange="renderMensal()">
+        <option value="ALL">Todos os depart.</option>
+        <option value="Entrega">Entrega</option>
+        <option value="Armazém">Armazém</option>
+        <option value="Puxada">Puxada</option>
+      </select>
+    </div>
+    <div class="kpi-row" id="kpi-mensal"></div>
+    <div class="panel">
+      <div class="panel-head"><div><div class="pt">Prejuízo por Semana R$</div><div class="ps">Clique em uma semana para ver as linhas</div></div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:280px"><canvas id="c-mensal-semana"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div><div class="pt">Pareto por Linha — Mês/Semana Selecionado</div><div class="ps">Clique na barra para ver detalhes da linha</div></div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:280px"><canvas id="c-mensal-pareto"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div><div class="pt">Tabela por Semana</div><div class="ps">Clique em uma linha para ver os produtos</div></div></div>
+      <div class="panel-body no-pad"><div class="tw" id="t-mensal"></div></div>
     </div>
   </div>
 
@@ -1543,6 +1576,7 @@ function render() {
   renderMotorista();
   renderSetorVenda();
   renderDiario();
+  renderMensal();
   renderWQI();
   renderResumo();
   renderGlossario();
@@ -3366,75 +3400,106 @@ function openDiarioDetalhe(data, dd, linha) {
   get('modal-title').textContent=linha;
   get('modal-sub').textContent=`Detalhamento — ${dd}`;
 
-  // Reposição Entrega → motoristas (de rawProd)
+  const mes=parseInt(data.split('-')[1]), anoD=parseInt(data.split('-')[0]);
+
+  // Reposição Entrega → motoristas (de rawProd, filtrado por mês/ano)
   if(linha==='Reposição Entrega') {
-    const rows=S.rawProd.filter(r=>
-      r.linha===linha && (base==='ALL'||r.base===base) &&
-      r.mes===parseInt(data.split('-')[1]) && r.ano===parseInt(data.split('-')[0])
-    );
-    // rawProd não tem campo data, então filtramos pelo mês/ano apenas
-    // caso rawDiario tenha o campo prod mas rawProd tenha motorista, usamos rawProd
+    const rows=S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD);
     const mapM={};
-    rows.forEach(r=>{
-      const key=r.motorista||'(sem motorista)';
-      mapM[key]=mapM[key]||{brl:0,hl:0};
-      mapM[key].brl+=r.brl; mapM[key].hl+=r.hl;
-    });
-    const sorted=Object.entries(mapM).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    rows.forEach(r=>{ const k=r.motorista||'(sem motorista)'; mapM[k]=mapM[k]||{brl:0,hl:0,prods:{}}; mapM[k].brl+=r.brl; mapM[k].hl+=r.hl; mapM[k].prods[r.prod||'?']=(mapM[k].prods[r.prod||'?']||0)+r.brl; });
+    const sorted=Object.entries(mapM).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
     const total=sorted.reduce((s,p)=>s+p.brl,0);
-    get('modal-pareto-label').textContent='Ranking de Motoristas';
-    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');},50);
-    _renderDetalheTabela(sorted, total, ['Motorista','R$','% Acum.','HLs'], p=>`
-      <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
-      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">${'{{cum}}'}</td>
-      <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
-    `);
+    get('modal-pareto-label').textContent='Ranking de Motoristas — clique para ver produtos';
+    if(sorted.length>0) setTimeout(()=>{
+      const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
+      makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');
+      cv.onclick=(e)=>{
+        const inst=CH['c-modal-pareto']; if(!inst) return;
+        const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false); if(!pts.length) return;
+        const lbl=inst.data.labels[pts[0].index];
+        const match=sorted.find(s=>s.nome===lbl); if(match) openDiarioNivel3(data,dd,linha,lbl,'motorista',match.prods);
+      };
+    },50);
+    _renderDetalheTabela(sorted, total, ['Motorista','R$','% Acum.','HLs'],
+      p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${data}','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','motorista',${JSON.stringify(p.prods)})">${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
   }
   // Trocas Mercado → setores
   else if(linha==='Trocas Mercado (RN)') {
-    const rows=S.rawProd.filter(r=>
-      r.linha===linha && (base==='ALL'||r.base===base) &&
-      r.mes===parseInt(data.split('-')[1]) && r.ano===parseInt(data.split('-')[0])
-    );
+    const rows=S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD);
     const mapS={};
-    rows.forEach(r=>{
-      const key=r.setor||'(sem setor)';
-      mapS[key]=mapS[key]||{brl:0,hl:0};
-      mapS[key].brl+=r.brl; mapS[key].hl+=r.hl;
-    });
-    const sorted=Object.entries(mapS).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    rows.forEach(r=>{ const k=r.setor||'(sem setor)'; mapS[k]=mapS[k]||{brl:0,hl:0,prods:{}}; mapS[k].brl+=r.brl; mapS[k].hl+=r.hl; mapS[k].prods[r.prod||'?']=(mapS[k].prods[r.prod||'?']||0)+r.brl; });
+    const sorted=Object.entries(mapS).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
     const total=sorted.reduce((s,p)=>s+p.brl,0);
-    get('modal-pareto-label').textContent='Ranking de Setores de Venda';
-    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');},50);
-    _renderDetalheTabela(sorted, total, ['Setor','R$','% Acum.','HLs'], p=>`
-      <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
-      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">${'{{cum}}'}</td>
-      <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
-    `);
+    get('modal-pareto-label').textContent='Ranking de Setores — clique para ver produtos';
+    if(sorted.length>0) setTimeout(()=>{
+      const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
+      makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');
+      cv.onclick=(e)=>{
+        const inst=CH['c-modal-pareto']; if(!inst) return;
+        const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false); if(!pts.length) return;
+        const lbl=inst.data.labels[pts[0].index];
+        const match=sorted.find(s=>s.nome===lbl); if(match) openDiarioNivel3(data,dd,linha,lbl,'setor',match.prods);
+      };
+    },50);
+    _renderDetalheTabela(sorted, total, ['Setor','R$','% Acum.','HLs'],
+      p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${data}','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','setor',${JSON.stringify(p.prods)})">${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
   }
   // Qualquer outra linha → produtos (de rawDiario)
   else {
-    const rows=S.rawDiario.filter(r=>
-      r.data===data && (base==='ALL'||r.base===base) && r.prod && r.linha===linha
-    );
+    const rows=S.rawDiario.filter(r=>r.data===data&&(base==='ALL'||r.base===base)&&r.prod&&r.linha===linha);
     const mapP={};
-    rows.forEach(r=>{
-      mapP[r.prod]=mapP[r.prod]||{brl:0,hl:0};
-      mapP[r.prod].brl+=r.brl; mapP[r.prod].hl+=r.hl;
-    });
+    rows.forEach(r=>{ mapP[r.prod]=mapP[r.prod]||{brl:0,hl:0}; mapP[r.prod].brl+=r.brl; mapP[r.prod].hl+=r.hl; });
     const sorted=Object.entries(mapP).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
     const total=sorted.reduce((s,p)=>s+p.brl,0);
     get('modal-pareto-label').textContent='Pareto de Produtos';
-    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
-    _renderDetalheTabela(sorted, total, ['Produto','R$','% Acum.','HLs'], p=>`
-      <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
-      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">${'{{cum}}'}</td>
-      <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
-    `);
+    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; cv.onclick=null; makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
+    _renderDetalheTabela(sorted, total, ['Produto','R$','% Acum.','HLs'],
+      p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
   }
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
+
+// NÍVEL 3: motorista/setor → produtos
+function openDiarioNivel3(data, dd, linha, chave, tipo, prodsObj) {
+  // breadcrumb: dia → linha → motorista/setor
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(dd, ()=>openDiarioModal(data,null,'ALL','ALL')));
+  bc.appendChild(_bcSep());
+  bc.appendChild(_bcItem(linha, ()=>openDiarioDetalhe(data,dd,linha)));
+  bc.appendChild(_bcSep());
+  bc.appendChild(_bcItem(chave, null));
+
+  get('modal-title').textContent=chave;
+  get('modal-sub').textContent=`${tipo==='motorista'?'Motorista':'Setor'} — ${dd}`;
+  get('modal-pareto-label').textContent='Pareto de Produtos';
+
+  // prodsObj pode ser objeto {prod:brl} ou precisamos buscar de rawProd
+  let sorted;
+  if(prodsObj && typeof prodsObj==='object') {
+    sorted=Object.entries(prodsObj).map(([k,v])=>({nome:k,brl:v,hl:0})).sort((a,b)=>b.brl-a.brl);
+  } else {
+    const mes=parseInt(data.split('-')[1]), anoD=parseInt(data.split('-')[0]);
+    const {base}=S;
+    const rows=S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD&&
+      (tipo==='motorista'?(r.motorista||'(sem motorista)')===chave:(r.setor||'(sem setor)')===chave));
+    const mapP={}; rows.forEach(r=>{ mapP[r.prod||'?']=mapP[r.prod||'?']||{brl:0,hl:0}; mapP[r.prod||'?'].brl+=r.brl; mapP[r.prod||'?'].hl+=r.hl; });
+    sorted=Object.entries(mapP).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+  }
+  const total=sorted.reduce((s,p)=>s+p.brl,0);
+  if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; cv.onclick=null; makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
+  _renderDetalheTabela(sorted, total, ['Produto','R$','% Acum.'],
+    p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+        <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+        <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td>`);
   get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
 }
 
@@ -3454,6 +3519,178 @@ function _renderDetalheTabela(sorted, total, cols, rowFn) {
         return `<tr style="border-bottom:1px solid #1a2030"><td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>${cells}</tr>`;
       }).join('')
     : `<tr><td colspan="${cols.length+1}" style="padding:40px;text-align:center;color:#5a6a88">Sem registros.</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// VISÃO MENSAL
+// ═══════════════════════════════════════════════════════
+// Retorna número da semana dentro do mês (1=semana 1 com dias 1-7, etc.)
+function semanaDoMes(dataStr) {
+  const d=parseInt(dataStr.split('-')[2]||0);
+  return Math.ceil(d/7);
+}
+// Label amigável de semana
+function lblSemana(s) { const ini=(s-1)*7+1, fim=Math.min(s*7,31); return `Sem ${s} (${ini}-${fim})`; }
+
+function renderMensal() {
+  const {base} = S;
+  const mesSel = get('sel-mensal-mes')?.value || '';
+  const semanaSel = get('sel-mensal-semana')?.value || 'ALL';
+  const linhaF_arr = msGetValues('ms-mensal-linha');
+  const deptF = get('sel-mensal-dept')?.value || 'ALL';
+  if(!mesSel || !S.rawDiario?.length) return;
+
+  // filtro base de rawDiario para o mês
+  const rowsMes = S.rawDiario.filter(r=>
+    r.data.startsWith(mesSel) && (base==='ALL'||r.base===base) &&
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
+    (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
+  );
+
+  // semanas disponíveis neste mês
+  const semanasDisp=[...new Set(rowsMes.map(r=>semanaDoMes(r.data)))].sort((a,b)=>a-b);
+  // atualiza select de semanas
+  const selSem=get('sel-mensal-semana');
+  if(selSem){
+    const curVal=selSem.value;
+    selSem.innerHTML='<option value="ALL">Todas as semanas</option>';
+    semanasDisp.forEach(s=>{const o=document.createElement('option');o.value=s;o.text=lblSemana(s);selSem.add(o);});
+    if(curVal!=='ALL'&&semanasDisp.includes(parseInt(curVal))) selSem.value=curVal;
+  }
+
+  // filtra pela semana selecionada
+  const rowsFilt = semanaSel==='ALL' ? rowsMes : rowsMes.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
+
+  // ── KPIs ──
+  const totBRL=rowsFilt.reduce((s,r)=>s+r.brl,0);
+  const totHL=rowsFilt.reduce((s,r)=>s+r.hl,0);
+  const deptMap={}; rowsFilt.forEach(r=>{ const d=NOME_TO_DEF[r.linha]?.dept||'?'; deptMap[d]=(deptMap[d]||0)+r.brl; });
+  get('kpi-mensal').innerHTML=`
+    <div class="kpi"><div class="kpi-label">Total R$ — ${semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel))}</div><div class="kpi-value">${fmtBRL(totBRL)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total HL</div><div class="kpi-value">${fmtHL(totHL)}</div></div>
+    ${Object.entries(deptMap).map(([d,v])=>`<div class="kpi" style="border-left:3px solid ${DEPT_C[d]||'#fff'}"><div class="kpi-label">${d}</div><div class="kpi-value" style="color:${DEPT_C[d]||'#fff'}">${fmtBRL(v)}</div></div>`).join('')}
+  `;
+
+  // ── Gráfico por semana (barras) ──
+  const semMap={}; rowsMes.filter(r=>linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)).filter(r=>deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
+    .forEach(r=>{ const s=semanaDoMes(r.data); semMap[s]=(semMap[s]||0)+r.brl; });
+  const semsAll=[...new Set(Object.keys(semMap).map(Number))].sort((a,b)=>a-b);
+  dchart('c-mensal-semana'); const ctx=get('c-mensal-semana').getContext('2d');
+  CH['c-mensal-semana']=new Chart(ctx,{
+    type:'bar',
+    data:{labels:semsAll.map(s=>lblSemana(s)),datasets:[{
+      label:'R$',data:semsAll.map(s=>semMap[s]||0),
+      backgroundColor:semsAll.map(s=>parseInt(semanaSel)===s?'rgba(245,158,11,.9)':'rgba(45,126,247,.7)'),
+      borderRadius:4,borderSkipped:false
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(_,els)=>{
+        if(!els.length) return;
+        const s=semsAll[els[0].index];
+        get('sel-mensal-semana').value=s;
+        renderMensal();
+      },
+      onHover:(_,els)=>{get('c-mensal-semana').style.cursor=els.length?'pointer':'default';},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1,callbacks:{label:i=>`R$ ${fmtBRL(i.raw)}`}}},
+      scales:{x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.4)'}}}}
+  });
+
+  // ── Pareto por linha ──
+  const linhaMap={}; rowsFilt.forEach(r=>{ linhaMap[r.linha]=(linhaMap[r.linha]||{brl:0,hl:0}); linhaMap[r.linha].brl+=r.brl; linhaMap[r.linha].hl+=r.hl; });
+  const paretoItems=Object.entries(linhaMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+  dchart('c-mensal-pareto');
+  if(paretoItems.length>0) makePareto('c-mensal-pareto',paretoItems.slice(0,15),'nome','brl',fmtBRL,'R$ por Linha',
+    (idx)=>{
+      const linha=paretoItems[idx]?.nome; if(!linha) return;
+      openMensalLinhaModal(mesSel, semanaSel, linha);
+    });
+
+  // ── Tabela semanal ──
+  const diasMap={}; rowsFilt.forEach(r=>{ diasMap[r.data]=diasMap[r.data]||{brl:0,hl:0,semana:semanaDoMes(r.data)}; diasMap[r.data].brl+=r.brl; diasMap[r.data].hl+=r.hl; });
+  const diasSorted=Object.entries(diasMap).map(([d,v])=>({data:d,...v})).sort((a,b)=>a.data.localeCompare(b.data));
+  const totTabela=diasSorted.reduce((s,d)=>s+d.brl,0);
+  let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#0c0f14;position:sticky;top:0">
+      <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Data</th>
+      <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Semana</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Total</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HLs</th>
+    </tr></thead><tbody>`;
+  diasSorted.forEach(d=>{
+    const dd=d.data.split('-').reverse().join('/');
+    const pct=(d.brl/totTabela*100).toFixed(1);
+    html+=`<tr style="border-bottom:1px solid #1a2030;cursor:pointer" onclick="openMensalDiaModal('${d.data}','${dd}')">
+      <td style="padding:7px 12px;color:#e2e8f4">${dd}</td>
+      <td style="padding:7px 12px;color:#5a6a88;font-size:11px">${lblSemana(d.semana)}</td>
+      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-weight:600">${fmtBRL(d.brl)}</td>
+      <td style="padding:7px 12px;text-align:right;color:#5a6a88">${pct}%</td>
+      <td style="padding:7px 12px;text-align:right;color:#5a6a88">${fmtHL(d.hl)}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table>`;
+  get('t-mensal').innerHTML=html;
+}
+
+// Clicou num DIA dentro da visão mensal → mesmo drill-down da visão diária
+function openMensalDiaModal(data, dd) {
+  openDiarioModal(data, null, 'ALL', 'ALL');
+}
+
+// Clicou numa LINHA no pareto mensal → abre drill-down de linha para o mês/semana inteiro
+function openMensalLinhaModal(mesSel, semanaSel, linha) {
+  const {base}=S;
+  const dd=semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel));
+
+  // breadcrumb
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(mesSel,null));
+  if(semanaSel!=='ALL'){bc.appendChild(_bcSep()); bc.appendChild(_bcItem(lblSemana(parseInt(semanaSel)),null));}
+  bc.appendChild(_bcSep());
+  bc.appendChild(_bcItem(linha,null));
+
+  get('modal-title').textContent=linha;
+  get('modal-sub').textContent=`Detalhamento — ${dd}`;
+
+  const mes=parseInt(mesSel.split('-')[1]), anoD=parseInt(mesSel.split('-')[0]);
+
+  if(linha==='Reposição Entrega') {
+    let rows=S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD);
+    if(semanaSel!=='ALL'){
+      const s=parseInt(semanaSel);
+      const datas=new Set(S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&semanaDoMes(r.data)===s).map(r=>r.data));
+      // rawProd não tem data dia — não podemos filtrar por semana exata, mostramos o mês todo com aviso
+    }
+    const mapM={}; rows.forEach(r=>{ const k=r.motorista||'(sem motorista)'; mapM[k]=mapM[k]||{brl:0,hl:0,prods:{}}; mapM[k].brl+=r.brl; mapM[k].hl+=r.hl; mapM[k].prods[r.prod||'?']=(mapM[k].prods[r.prod||'?']||0)+r.brl; });
+    const sorted=Object.entries(mapM).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
+    const total=sorted.reduce((s,p)=>s+p.brl,0);
+    get('modal-pareto-label').textContent='Ranking de Motoristas — clique para ver produtos';
+    if(sorted.length>0) setTimeout(()=>{
+      const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
+      makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');
+      cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sorted.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'motorista',match.prods);};
+    },50);
+    _renderDetalheTabela(sorted,total,['Motorista','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','motorista',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+  } else if(linha==='Trocas Mercado (RN)') {
+    const rows=S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD);
+    const mapS={}; rows.forEach(r=>{ const k=r.setor||'(sem setor)'; mapS[k]=mapS[k]||{brl:0,hl:0,prods:{}}; mapS[k].brl+=r.brl; mapS[k].hl+=r.hl; mapS[k].prods[r.prod||'?']=(mapS[k].prods[r.prod||'?']||0)+r.brl; });
+    const sorted=Object.entries(mapS).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
+    const total=sorted.reduce((s,p)=>s+p.brl,0);
+    get('modal-pareto-label').textContent='Ranking de Setores — clique para ver produtos';
+    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='pointer';makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sorted.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'setor',match.prods);};},50);
+    _renderDetalheTabela(sorted,total,['Setor','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','setor',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+  } else {
+    // outras linhas → produtos de rawDiario, filtrado por mês (e semana se possível)
+    let rowsD=S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&r.prod&&r.linha===linha);
+    if(semanaSel!=='ALL') rowsD=rowsD.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
+    const mapP={}; rowsD.forEach(r=>{ mapP[r.prod]=mapP[r.prod]||{brl:0,hl:0}; mapP[r.prod].brl+=r.brl; mapP[r.prod].hl+=r.hl; });
+    const sorted=Object.entries(mapP).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const total=sorted.reduce((s,p)=>s+p.brl,0);
+    get('modal-pareto-label').textContent='Pareto de Produtos';
+    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='default';cv.onclick=null;makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
+    _renderDetalheTabela(sorted,total,['Produto','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+  }
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3878,14 +4115,14 @@ function fillSelects() {
     ALL_NOMES.forEach(n=>{const o=document.createElement('option');o.value=n;o.text=n;sel.add(o);});
   });
   // Multi-selects
-  ['ms-linha-hl','ms-me-linha','ms-diario-linha','ms-linha-rhl','ms-linha-prod'].forEach(id=>{
-    const fn={'ms-linha-hl':renderHL,'ms-me-linha':renderMarcaEmbal,'ms-diario-linha':renderDiario,'ms-linha-rhl':renderRHLChart,'ms-linha-prod':renderProd}[id];
+  ['ms-linha-hl','ms-me-linha','ms-diario-linha','ms-mensal-linha','ms-linha-rhl','ms-linha-prod'].forEach(id=>{
+    const fn={'ms-linha-hl':renderHL,'ms-me-linha':renderMarcaEmbal,'ms-diario-linha':renderDiario,'ms-mensal-linha':renderMensal,'ms-linha-rhl':renderRHLChart,'ms-linha-prod':renderProd}[id];
     msCreate(id, fn);
     msPopulate(id, ALL_NOMES);
   });
-  // Fill month selects for diario, wqi and resumo
+  // Fill month selects for diario, mensal, wqi and resumo
   const mesesDisp=[...new Set((S.rawDiario||[]).map(r=>r.data.substring(0,7)))].sort();
-  ['sel-diario-mes','sel-wqi-mes','sel-resumo-mes'].forEach(id=>{
+  ['sel-diario-mes','sel-mensal-mes','sel-wqi-mes','sel-resumo-mes'].forEach(id=>{
     const sel=get(id); if(!sel) return; sel.innerHTML='';
     mesesDisp.forEach(m=>{const o=document.createElement('option');o.value=m;o.text=m;sel.add(o);});
     if(mesesDisp.length) sel.value=mesesDisp[mesesDisp.length-1];
