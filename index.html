@@ -2763,8 +2763,8 @@ function renderAxa() {
     html+=`<tr><td colspan="${2+anos.length*2+1}" class="dept">${dept}</td></tr>`;
     ls.forEach(n=>{
       const vs12=anos.map(a=>({
-        acum:sumBRL(n,base,a,12),
-        period:sumBRL(n,base,a,S.mesAte)
+        acum:sumBRLFull(n,base,a,S.mesAte),   // Acumulado: jan→mesAte, ignora filtro de período
+        period:sumBRL(n,base,a,S.mesAte)       // Período: conforme filtro selecionado (mesesSel)
       }));
       const last=vs12[vs12.length-1].acum;
       const prev=vs12[vs12.length-2]?.acum||0;
@@ -3061,9 +3061,11 @@ function renderMotorista() {
   const baseF = document.getElementById('sel-mot-base').value;
   const baseFilter = baseF!=='ALL' ? baseF : (S.base!=='ALL' ? S.base : 'ALL');
 
-  // Usa rawDiario (tem motorista direto em todos os registros) em vez de rawProd
+  // Usa rawDiario filtrando APENAS registros com motorista preenchido (dados novos 03.18.05)
+  // Dados antigos (03.05.28.01) não têm motorista → não aparecem nesta aba
   const filtered = S.rawDiario.filter(r=>
     r.linha==='Reposição Entrega' &&
+    r.motorista && r.motorista.trim() &&
     r.data.startsWith(String(ano)) &&
     mesesSel.includes(parseInt(r.data.split('-')[1])) &&
     parseInt(r.data.split('-')[1]) <= mesAte &&
@@ -3072,7 +3074,7 @@ function renderMotorista() {
 
   const map = {};
   filtered.forEach(r=>{
-    const k = (r.motorista && r.motorista.trim()) || 'Não Identificado';
+    const k = r.motorista.trim();
     if(!map[k]) map[k]={brl:0, prods:{}};
     map[k].brl += r.brl;
     if(r.prod) { map[k].prods[r.prod] = (map[k].prods[r.prod]||0) + r.brl; }
@@ -3997,17 +3999,18 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
 
   // Helper: agrupa rawDiario do período (mês ou semana) por chave (motorista/setor)
   function _agrupaMensalPorChave(chaveField) {
-    // NÃO filtra por r.prod — inclui todos os registros da linha para não perder prejuízo
-    let rowsDia = S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&r.linha===linha);
+    // Filtra apenas registros que têm o campo direto preenchido (dados novos 03.18.05)
+    // Registros antigos (03.05.28.01) não têm motorista/setor → excluídos para não inflar "(não identificado)"
+    let rowsDia = S.rawDiario.filter(r=>
+      r.data.startsWith(mesSel) &&
+      (base==='ALL'||r.base===base) &&
+      r.linha===linha &&
+      r[chaveField] && r[chaveField].trim()
+    );
     if(semanaSel!=='ALL') rowsDia = rowsDia.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
-    // lookup prod→chave via rawProd (usado como fallback para registros sem campo direto)
-    const prodChave = {};
-    S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD)
-      .forEach(r=>{ if(r.prod && r[chaveField]) prodChave[r.prod]=r[chaveField]; });
     const map = {};
     rowsDia.forEach(r=>{
-      // prioridade: campo direto em rawDiario (motorista/setor), depois lookup via prod, depois não identificado
-      const k = (r[chaveField] && r[chaveField].trim()) || prodChave[r.prod] || '(não identificado)';
+      const k = r[chaveField].trim();
       map[k] = map[k] || {brl:0,hl:0,prods:{}};
       map[k].brl += r.brl; map[k].hl += r.hl;
       if(r.prod) map[k].prods[r.prod] = (map[k].prods[r.prod]||0) + r.brl;
