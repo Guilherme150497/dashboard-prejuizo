@@ -3994,22 +3994,49 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
     return Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
   }
 
+  // Helper: agrupa rawDiario por data (evolução diária) — fallback quando não há motorista/setor
+  function _agrupaMensalPorData() {
+    let rowsDia = S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&r.linha===linha);
+    if(semanaSel!=='ALL') rowsDia = rowsDia.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
+    const map = {};
+    rowsDia.forEach(r=>{ map[r.data]=map[r.data]||{brl:0,hl:0}; map[r.data].brl+=r.brl; map[r.data].hl+=r.hl; });
+    return Object.entries(map).map(([k,v])=>({nome:k,...v})).sort((a,b)=>a.nome.localeCompare(b.nome));
+  }
+
   if(linha==='Reposição Entrega') {
-    const sorted=_agrupaMensalPorChave('motorista');
-    const total=sorted.reduce((s,p)=>s+p.brl,0);
-    get('modal-pareto-label').textContent='Ranking de Motoristas — clique para ver produtos';
-    if(sorted.length>0) setTimeout(()=>{
-      const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
-      makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');
-      cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sorted.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'motorista',match.prods);};
-    },50);
-    _renderDetalheTabela(sorted,total,['Motorista','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','motorista',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+    // tenta agrupamento por motorista; se não tiver dados cai no agrupamento por data
+    const sortedMot=_agrupaMensalPorChave('motorista');
+    if(sortedMot.length>0) {
+      const total=sortedMot.reduce((s,p)=>s+p.brl,0);
+      get('modal-pareto-label').textContent='Ranking de Motoristas — clique para ver produtos';
+      setTimeout(()=>{
+        const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
+        makePareto('c-modal-pareto',sortedMot.slice(0,20),'nome','brl',fmtBRL,'R$');
+        cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedMot.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'motorista',match.prods);};
+      },50);
+      _renderDetalheTabela(sortedMot,total,['Motorista','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','motorista',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+    } else {
+      // sem detalhe de motorista — mostra por data
+      const sorted=_agrupaMensalPorData();
+      const total=sorted.reduce((s,p)=>s+p.brl,0);
+      get('modal-pareto-label').textContent='Evolução Diária — Reposição Entrega';
+      if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='default';cv.onclick=null;makePareto('c-modal-pareto',sorted.slice(0,31),'nome','brl',fmtBRL,'R$');},50);
+      _renderDetalheTabela(sorted,total,['Data','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${p.hl>0?fmtHL(p.hl):'—'}</td>`);
+    }
   } else if(linha==='Trocas Mercado (RN)') {
-    const sorted=_agrupaMensalPorChave('setor');
-    const total=sorted.reduce((s,p)=>s+p.brl,0);
-    get('modal-pareto-label').textContent='Ranking de Setores — clique para ver produtos';
-    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='pointer';makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sorted.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'setor',match.prods);};},50);
-    _renderDetalheTabela(sorted,total,['Setor','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','setor',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+    const sortedSet=_agrupaMensalPorChave('setor');
+    if(sortedSet.length>0) {
+      const total=sortedSet.reduce((s,p)=>s+p.brl,0);
+      get('modal-pareto-label').textContent='Ranking de Setores — clique para ver produtos';
+      setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='pointer';makePareto('c-modal-pareto',sortedSet.slice(0,20),'nome','brl',fmtBRL,'R$');cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedSet.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'setor',match.prods);};},50);
+      _renderDetalheTabela(sortedSet,total,['Setor','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','setor',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+    } else {
+      const sorted=_agrupaMensalPorData();
+      const total=sorted.reduce((s,p)=>s+p.brl,0);
+      get('modal-pareto-label').textContent='Evolução Diária — Trocas Mercado (RN)';
+      if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='default';cv.onclick=null;makePareto('c-modal-pareto',sorted.slice(0,31),'nome','brl',fmtBRL,'R$');},50);
+      _renderDetalheTabela(sorted,total,['Data','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${p.hl>0?fmtHL(p.hl):'—'}</td>`);
+    }
   } else {
     // outras linhas → produtos de rawDiario, filtrado por mês (e semana se possível)
     let rowsD=S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&r.prod&&r.linha===linha);
