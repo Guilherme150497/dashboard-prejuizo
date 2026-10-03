@@ -687,6 +687,10 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
       <div class="panel-body"><div class="chart-wrap" style="height:280px"><canvas id="c-diario-brl"></canvas></div></div>
     </div>
     <div class="panel">
+      <div class="panel-head"><div><div class="pt">R$/HL Diário</div><div class="ps">Prejuízo por hectolitro vendido — linha tracejada = meta</div></div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:220px"><canvas id="c-diario-rhl"></canvas></div></div>
+    </div>
+    <div class="panel">
       <div class="panel-head"><div><div class="pt">Pareto por Linha — Mês Selecionado</div><div class="ps">Clique na barra para ver produtos da linha</div></div></div>
       <div class="panel-body"><div class="chart-wrap" style="height:280px"><canvas id="c-diario-pareto"></canvas></div></div>
     </div>
@@ -717,6 +721,10 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="panel">
       <div class="panel-head"><div><div class="pt">Prejuízo por Semana R$</div><div class="ps">Clique em uma semana para ver as linhas</div></div></div>
       <div class="panel-body"><div class="chart-wrap" style="height:280px"><canvas id="c-mensal-semana"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div><div class="pt">R$/HL — Semanas do Mês</div><div class="ps">Prejuízo por hectolitro vendido — linha tracejada = meta mensal</div></div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:220px"><canvas id="c-mensal-rhl"></canvas></div></div>
     </div>
     <div class="panel">
       <div class="panel-head"><div><div class="pt">Pareto por Linha — Mês/Semana Selecionado</div><div class="ps">Clique na barra para ver detalhes da linha</div></div></div>
@@ -3530,6 +3538,42 @@ function renderDiario() {
     }
   });
 
+  // Gráfico R$/HL diário com linha de meta
+  const rhlVals=days.map(d=>{
+    const hlV=bases2.reduce((s,b)=>s+(S.wqiDiario[b]?.[d]?.hl_vend||0),0);
+    return hlV>0 ? byDay[d].brl/hlV : null;
+  });
+  const rhlPointColors=rhlVals.map(v=>v===null?'transparent':v>metaRHLDia&&metaRHLDia>0?'rgba(248,81,73,.9)':'rgba(34,197,94,.85)');
+  dchart('c-diario-rhl'); const ctxRHL=get('c-diario-rhl').getContext('2d');
+  CH['c-diario-rhl']=new Chart(ctxRHL,{
+    type:'line',
+    data:{labels:days.map(d=>d.split('-').slice(1).reverse().join('/')),
+      datasets:[
+        {label:'R$/HL Realizado',data:rhlVals,
+          borderColor:'rgba(93,138,255,.8)',backgroundColor:'rgba(93,138,255,.08)',
+          borderWidth:2,fill:true,tension:.3,
+          pointRadius:5,pointBackgroundColor:rhlPointColors,pointBorderColor:'#0c0f14',pointBorderWidth:1.5,
+          spanGaps:false,order:2},
+        {label:`Meta R$/HL (${metaRHLDia>0?fmtRHL(metaRHLDia):'—'})`,
+          data:days.map(()=>metaRHLDia>0?metaRHLDia:null),
+          borderColor:'rgba(255,200,50,.85)',backgroundColor:'transparent',
+          borderWidth:2,borderDash:[6,4],pointRadius:0,tension:0,order:1}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:11},boxWidth:14,padding:12}},
+        tooltip:{mode:'index',intersect:false,callbacks:{
+          label:c=>c.raw===null?null:c.datasetIndex===0?`R$/HL: ${fmtRHL(c.raw)}`:`Meta: ${fmtRHL(c.raw)}`
+        },backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}
+      },
+      scales:{
+        x:{ticks:{color:'#5a6a88',font:{size:10}},grid:{color:'rgba(48,54,61,.3)'}},
+        y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtRHL(v)},grid:{color:'rgba(48,54,61,.3)'},
+          min:0}
+      }
+    }
+  });
+
   // Pareto por linha (R$)
   const byLinha={};
   filtered.forEach(r=>{byLinha[r.linha]=byLinha[r.linha]||{nome:r.linha,brl:0,hl:0};byLinha[r.linha].brl+=r.brl;byLinha[r.linha].hl+=r.hl;});
@@ -3952,6 +3996,49 @@ function renderMensal() {
       onHover:(_,els)=>{get('c-mensal-semana').style.cursor=els.length?'pointer':'default';},
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1,callbacks:{label:i=>`R$ ${fmtBRL(i.raw)}`}}},
       scales:{x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.4)'}}}}
+  });
+
+  // ── Gráfico R$/HL por semana ──
+  // HL vendido por semana (wqiDiario, todas as bases, mês selecionado)
+  const bases2m = base==='ALL' ? Object.keys(S.wqiDiario||{}) : [base];
+  const hlPorSem={};
+  bases2m.forEach(b=>{
+    Object.entries(S.wqiDiario[b]||{}).filter(([d])=>d.startsWith(mesSel)).forEach(([d,v])=>{
+      const s=semanaDoMes(d); hlPorSem[s]=(hlPorSem[s]||0)+v.hl_vend;
+    });
+  });
+  // Meta R$/HL mensal = meta_brl / hl_vend_total do mês
+  const hlVendMesTotMens = Object.values(hlPorSem).reduce((s,v)=>s+v,0);
+  const metaRHLMens = hlVendMesTotMens>0 ? metaMensal/hlVendMesTotMens : 0;
+  const rhlPorSem = semsAll.map(s=>{
+    const hl = hlPorSem[s]||0;
+    return hl>0 ? (semMap[s]||0)/hl : null;
+  });
+  const rhlBarColors = rhlPorSem.map(v=> v===null?'rgba(93,138,255,.3)': v>metaRHLMens&&metaRHLMens>0?'rgba(239,68,68,.75)':'rgba(34,197,94,.75)');
+  dchart('c-mensal-rhl'); const ctxRHLM=get('c-mensal-rhl').getContext('2d');
+  CH['c-mensal-rhl']=new Chart(ctxRHLM,{
+    type:'bar',
+    data:{labels:semsAll.map(s=>lblSemana(s)),
+      datasets:[
+        {label:'R$/HL Realizado',data:rhlPorSem,
+          backgroundColor:rhlBarColors,borderRadius:4,borderSkipped:false,order:2},
+        {type:'line',label:`Meta R$/HL (${metaRHLMens>0?fmtRHL(metaRHLMens):'—'})`,
+          data:semsAll.map(()=>metaRHLMens>0?metaRHLMens:null),
+          borderColor:'rgba(255,200,50,.85)',backgroundColor:'transparent',
+          borderWidth:2,borderDash:[6,4],pointRadius:0,tension:0,order:1}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:11},boxWidth:14,padding:12}},
+        tooltip:{mode:'index',intersect:false,callbacks:{
+          label:c=>c.raw===null?null:c.datasetIndex===0?`R$/HL: ${fmtRHL(c.raw)}`:`Meta: ${fmtRHL(c.raw)}`
+        },backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}
+      },
+      scales:{
+        x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtRHL(v)},grid:{color:'rgba(48,54,61,.4)'},min:0}
+      }
+    }
   });
 
   // ── Pareto por linha ──
