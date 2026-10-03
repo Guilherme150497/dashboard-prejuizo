@@ -1535,6 +1535,8 @@ function sumBRL(nome,base,ano,ateM) { let s=0; getMs(ateM).forEach(m=>s+=getBRL(
 function sumBRLFull(nome,base,ano,ateM) { let s=0; for(let m=1;m<=ateM;m++) s+=getBRL(nome,base,ano,m); return s; }
 function sumHL(nome,base,ano,ateM)  { let s=0; getMs(ateM).forEach(m=>s+=getHL(nome,base,ano,m));  return s; }
 function sumMeta(nome,base,ano,ateM){ let s=0; getMs(ateM).forEach(m=>s+=getMeta(nome,base,ano,m)); return s; }
+// sumMetaFull: ignora mesesSel — sempre soma jan→ateM (usado para "Meta Ano" que não deve mudar com filtro de período)
+function sumMetaFull(nome,base,ano,ateM){ let s=0; for(let m=1;m<=ateM;m++) s+=getMeta(nome,base,ano,m); return s; }
 function sumVol(base,ano,ateM)      { let s=0; getMs(ateM).forEach(m=>s+=getVol(base,ano,m)); return s; }
 function sumVolEntregue(base,ano,ateM){ let s=0; getMs(ateM).forEach(m=>s+=getVolEntregue(base,ano,m)); return s; }
 
@@ -1702,7 +1704,7 @@ function renderPacote() {
     ls.forEach(nome => {
       const acum  = sumBRL(nome,base,ano,mesAte);       // período filtrado (mesesSel)
       const acumFull = sumBRLFull(nome,base,ano,mesAte); // jan→mesAte fixo
-      const metaA = sumMeta(nome,base,ano,12);
+      const metaA = sumMetaFull(nome,base,ano,12);  // Meta Ano: sempre jan→dez, ignora filtro de período
       const metaP = sumMeta(nome,base,ano,mesAte);
       // % participação: AG usa seu próprio total, outros usam tot geral
       const base_ = isAG ? totAG : tot;
@@ -4394,8 +4396,8 @@ function renderResumo() {
       const real   = getBRL(nome,base,mesAno,mes);
       const meta   = getMeta(nome,base,mesAno,mes);
       const antM   = mes>1 ? getBRL(nome,base,mesAno,mes-1) : getBRL(nome,base,mesAno-1,12);
-      const acum   = sumBRL(nome,base,mesAno,mes);
-      const metaA  = sumMeta(nome,base,mesAno,mes);
+      const acum   = sumBRLFull(nome,base,mesAno,mes);  // Acum. Ano: jan→mes fixo
+      const metaA  = sumMetaFull(nome,base,mesAno,mes); // Meta Ano: jan→mes fixo, ignora filtro período
       const disp   = real - meta;
       const pct    = meta>0 ? (real/meta*100).toFixed(1)+'%' : '—';
       const pctA   = metaA>0 ? (acum/metaA*100).toFixed(1)+'%' : '—';
