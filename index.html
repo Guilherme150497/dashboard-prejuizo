@@ -2574,8 +2574,58 @@ function renderProd() {
   const top20brl=sorted.slice(0,20);
   const top20hl=[...sorted].sort((a,b)=>b.hl-a.hl).slice(0,20);
 
-  makePareto('c-prod-brl', top20brl, 'nome', 'brl', fmtBRL, 'R$ Prejuízo');
-  makePareto('c-prod-hl',  top20hl,  'nome', 'hl',  v=>fmtHL(v)+' HL', 'HL Perdido');
+  // Clique no pareto abre modal de linhas do produto
+  const _openProdLinhas = (prodNome) => {
+    // Agrega as linhas daquele produto no período filtrado
+    const linhasMap = {};
+    S.rawProd.filter(r=>
+      r.prod===prodNome &&
+      (base==='ALL'||r.base===base) &&
+      (r.ano===ano||(r.ano>ano)) &&
+      (r.ano!==ano||r.mes<=mesAte) &&
+      (r.ano!==ano||mesesSel.includes(r.mes)) &&
+      (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
+      (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
+    ).forEach(r=>{
+      linhasMap[r.linha]=linhasMap[r.linha]||{brl:0,hl:0};
+      linhasMap[r.linha].brl+=r.brl; linhasMap[r.linha].hl+=r.hl;
+    });
+    const linhasSorted=Object.entries(linhasMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    if(!linhasSorted.length) return;
+    const total=linhasSorted.reduce((s,l)=>s+l.brl,0);
+
+    // Breadcrumb simples
+    const bc=get('modal-breadcrumb'); bc.innerHTML='';
+    bc.appendChild(_bcItem('Por Produto', null));
+    bc.appendChild(_bcSep());
+    bc.appendChild(_bcItem(prodNome, null));
+
+    get('modal-title').textContent=prodNome;
+    const lblPer = mesesSel.length===mesAte
+      ? `Jan–${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mesAte-1]} ${ano}`
+      : mesesSel.map(m=>['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]).join(', ');
+    get('modal-sub').textContent=`Linhas de prejuízo — ${lblPer}`;
+    get('modal-pareto-label').textContent='Pareto de Linhas — R$ Prejuízo';
+
+    setTimeout(()=>{
+      const cv=get('c-modal-pareto'); cv.style.cursor='default'; cv.onclick=null;
+      makePareto('c-modal-pareto', linhasSorted, 'nome', 'brl', fmtBRL, 'R$');
+    },50);
+
+    let running2=0;
+    _renderDetalheTabela(linhasSorted, total, ['Linha de Prejuízo','R$','% Acum.','HLs'],
+      p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+
+    get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+  };
+
+  makePareto('c-prod-brl', top20brl, 'nome', 'brl', fmtBRL, 'R$ Prejuízo',
+    (nome)=>_openProdLinhas(nome));
+  makePareto('c-prod-hl',  top20hl,  'nome', 'hl',  v=>fmtHL(v)+' HL', 'HL Perdido',
+    (nome)=>_openProdLinhas(nome));
 
   const totalBRL=sorted.reduce((s,p)=>s+p.brl,0);
   let running=0;
@@ -2595,7 +2645,8 @@ function renderProd() {
     const cum=(running/totalBRL*100).toFixed(1);
     const zona=parseFloat(cum)<=80?'🔴':parseFloat(cum)<=95?'🟡':'🟢';
     const cumCls=parseFloat(cum)<=80?'red':parseFloat(cum)<=95?'':'green';
-    html+=`<tr>
+    const pEsc=p.nome.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    html+=`<tr style="cursor:pointer" onclick="_openProdLinhasGlobal('${pEsc}')" title="Clique para ver linhas de prejuízo deste produto">
       <td style="text-align:center;color:var(--muted);font-size:11px">${i+1}</td>
       <td class="left">${p.nome}</td>
       <td class="left" style="font-size:11px;color:var(--muted)">${p.linha}</td>
@@ -2608,6 +2659,9 @@ function renderProd() {
   });
   html+='</tbody></table>';
   document.getElementById('t-prod').innerHTML=html;
+
+  // Expõe a função no escopo global para uso no onclick inline da tabela
+  window._openProdLinhasGlobal = _openProdLinhas;
 }
 
 
