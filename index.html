@@ -3480,17 +3480,45 @@ function renderDiario() {
     </div>
   `;
 
-  // Bar chart - prejuízo diário
+  // Meta diária = meta do mês (linhas filtradas) ÷ dias úteis do mês
+  // Dias úteis = dias distintos com registro no mês inteiro (independente do filtro de linha)
+  const diasUteisMes = [...new Set(
+    S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)).map(r=>r.data)
+  )].length || 1;
+
+  const ano_ = parseInt(mesSel.split('-')[0]), mes_ = parseInt(mesSel.split('-')[1]);
+  // Meta mensal filtrada pelas linhas/dept selecionados
+  const linhasParaMeta = ALL_NOMES.filter(n=>
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(n)) &&
+    (deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF)
+  );
+  const metaMes = linhasParaMeta.reduce((s,n)=>s+getMeta(n,base,ano_,mes_),0);
+  const metaDia = metaMes / diasUteisMes;
+
+  // Bar chart - prejuízo diário com linha de meta diária
   const dayColors=vals.map(v=>{const p=v/Math.max(...vals,0.001);return p>0.7?'rgba(248,81,73,.85)':p>0.4?'rgba(240,163,10,.85)':'rgba(63,185,80,.75)';});
   dchart('c-diario-brl'); const ctx=get('c-diario-brl').getContext('2d');
   CH['c-diario-brl']=new Chart(ctx,{
     type:'bar',
     data:{labels:days.map(d=>d.split('-').slice(1).reverse().join('/')),
-      datasets:[{data:vals,backgroundColor:dayColors,hoverBackgroundColor:dayColors.map(c=>c.replace('.85','1').replace('.75','1')),borderRadius:3}]},
+      datasets:[
+        {data:vals,backgroundColor:dayColors,hoverBackgroundColor:dayColors.map(c=>c.replace('.85','1').replace('.75','1')),borderRadius:3,order:2},
+        {type:'line',label:`Meta Diária (÷${diasUteisMes}d)`,data:days.map(()=>metaDia),
+          borderColor:'rgba(255,200,50,.9)',backgroundColor:'transparent',
+          borderWidth:2,borderDash:[6,4],pointRadius:0,
+          tension:0,order:1}
+      ]},
     options:{responsive:true,maintainAspectRatio:false,
-      onClick:(_,els)=>{if(els[0]) openDiarioModal(days[els[0].index],byDay[days[els[0].index]],linhaF_arr,deptF);},
-      onHover:(_,els)=>{get('c-diario-brl').style.cursor=els.length?'pointer':'default';},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`R$ ${fmtBRL(c.raw)} — clique para ver produtos`},backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#2d7ef7'}},
+      onClick:(_,els)=>{const bar=els.find(e=>e.datasetIndex===0);if(bar!=null) openDiarioModal(days[bar.index],byDay[days[bar.index]],linhaF_arr,deptF);},
+      onHover:(_,els)=>{get('c-diario-brl').style.cursor=els.some(e=>e.datasetIndex===0)?'pointer':'default';},
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:11},boxWidth:14,padding:12,
+          filter:item=>item.datasetIndex===1  // só mostra legenda da linha de meta
+        }},
+        tooltip:{mode:'index',intersect:false,callbacks:{
+          label:c=>c.datasetIndex===0?`Realizado: ${fmtBRL(c.raw)}`:`Meta diária: ${fmtBRL(c.raw)}`
+        },backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}
+      },
       scales:{x:{ticks:{color:'#5a6a88',font:{size:10}},grid:{color:'rgba(48,54,61,.3)'}},
         y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.3)'}}}
     }
@@ -3530,31 +3558,69 @@ function renderDiario() {
     }
   );
 
-  // Table
-  const byDayLinha={};
-  filtered.forEach(r=>{
-    const k=`${r.data}||${r.linha}`;
-    byDayLinha[k]=byDayLinha[k]||{data:r.data,linha:r.linha,brl:0,hl:0};
-    byDayLinha[k].brl+=r.brl; byDayLinha[k].hl+=r.hl;
+  // Table — uma linha por dia, com R$ e R$/HL por departamento
+  // Departamentos a mostrar (conforme filtro)
+  const DEPTS_TABELA = ['Entrega','Armazém','Puxada'];
+  const deptsVisiveis = deptF==='ALL' ? DEPTS_TABELA : DEPTS_TABELA.filter(d=>d===deptF);
+
+  // Agrega por dia → por dept
+  const byDayDept={};
+  S.rawDiario.filter(r=>
+    r.data.startsWith(mesSel) &&
+    (base==='ALL'||r.base===base) &&
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha))
+  ).forEach(r=>{
+    const dept=NOME_TO_DEF[r.linha]?.dept;
+    if(!deptsVisiveis.includes(dept)) return;
+    byDayDept[r.data]=byDayDept[r.data]||{};
+    byDayDept[r.data][dept]=byDayDept[r.data][dept]||{brl:0};
+    byDayDept[r.data][dept].brl+=r.brl;
   });
+
   const linhaFStr=JSON.stringify(linhaF_arr);
-  const tableRows=Object.values(byDayLinha).sort((a,b)=>a.data.localeCompare(b.data)||b.brl-a.brl);
-  let html=`<table><thead><tr>
-    <th class="left">Data</th><th class="left">Linha</th><th class="left">Dept</th>
-    <th>R$ Prejuízo</th><th>HL Perdido</th><th>HL Vendido</th><th>R$/HL Vendido</th><th></th>
-  </tr></thead><tbody>`;
-  tableRows.forEach(row=>{
-    const hlVend = bases2.reduce((s,b)=>s+(S.wqiDiario[b]?.[row.data]?.hl_vend||0),0);
-    const rhl = hlVend>0 ? row.brl/hlVend : 0;
-    const rhlClr = rhl>50?'var(--red)':rhl>20?'var(--amber)':'var(--green)';
-    html+=`<tr style="cursor:pointer" onclick="openDiarioModal('${row.data}',null,${linhaFStr},'${deptF}')">
-      <td class="left" style="font-size:12px">${row.data.split('-').reverse().join('/')}</td>
-      <td class="left">${row.linha}</td>
-      <td class="left" style="color:${DEPT_C[NOME_TO_DEF[row.linha]?.dept]||'#5a6a88'};font-size:11px">${NOME_TO_DEF[row.linha]?.dept||''}</td>
-      <td>${fmtBRL(row.brl)}</td>
-      <td style="color:var(--blue)">${row.hl>0?fmtHL(row.hl)+' HL':'—'}</td>
-      <td style="color:var(--muted)">${hlVend>0?fmtHL(hlVend)+' HL':'—'}</td>
-      <td style="color:${rhlClr};font-weight:600;font-size:11px">${rhl>0?fmtRHL(rhl):'—'}</td>
+  const daysAll=Object.keys(byDayDept).sort();
+
+  // Cores por dept
+  const DEPT_TABCOR={'Entrega':'var(--amber)','Armazém':'var(--blue)','Puxada':'var(--purple)'};
+
+  let html=`<table><thead>
+    <tr>
+      <th class="left" rowspan="2" style="vertical-align:middle">Data</th>
+      <th rowspan="2" style="vertical-align:middle">Total R$</th>
+      <th rowspan="2" style="vertical-align:middle">HL Vend.</th>
+      <th rowspan="2" style="color:var(--amber);vertical-align:middle">R$/HL Total</th>
+      ${deptsVisiveis.map(d=>`<th colspan="2" style="text-align:center;border-left:1px solid var(--border);color:${DEPT_TABCOR[d]}">${d}</th>`).join('')}
+      <th rowspan="2"></th>
+    </tr>
+    <tr>
+      ${deptsVisiveis.map(d=>`<th style="border-left:1px solid var(--border);font-size:10px;color:var(--muted)">R$</th><th style="font-size:10px;color:${DEPT_TABCOR[d]}">R$/HL</th>`).join('')}
+    </tr>
+  </thead><tbody>`;
+
+  daysAll.forEach(data=>{
+    const hlVend = bases2.reduce((s,b)=>s+(S.wqiDiario[b]?.[data]?.hl_vend||0),0);
+    const totalDia = deptsVisiveis.reduce((s,d)=>s+(byDayDept[data][d]?.brl||0),0);
+    const rhlTotal = hlVend>0 ? totalDia/hlVend : 0;
+    const rhlTotClr = rhlTotal>50?'var(--red)':rhlTotal>20?'var(--amber)':'var(--green)';
+    // vs meta diária
+    const vsMeta = metaDia>0 ? totalDia/metaDia : 0;
+    const metaClr = vsMeta>1.2?'var(--red)':vsMeta>0.9?'var(--amber)':'var(--green)';
+
+    html+=`<tr style="cursor:pointer" onclick="openDiarioModal('${data}',null,${linhaFStr},'${deptF}')">
+      <td class="left" style="font-size:12px">
+        ${data.split('-').reverse().join('/')}
+        ${metaDia>0?`<span style="font-size:10px;color:${metaClr};margin-left:6px">${(vsMeta*100).toFixed(0)}%meta</span>`:''}
+      </td>
+      <td style="font-weight:600">${fmtBRL(totalDia)}</td>
+      <td style="color:var(--muted);font-size:11px">${hlVend>0?fmtHL(hlVend)+' HL':'—'}</td>
+      <td style="color:${rhlTotClr};font-weight:700;font-size:11px">${rhlTotal>0?fmtRHL(rhlTotal):'—'}</td>
+      ${deptsVisiveis.map(d=>{
+        const v=byDayDept[data][d]?.brl||0;
+        const rhl=hlVend>0&&v>0?v/hlVend:0;
+        const clr=rhl>30?'var(--red)':rhl>12?'var(--amber)':'var(--green)';
+        return `<td style="border-left:1px solid var(--border);font-size:12px">${v>0?fmtBRL(v):'—'}</td>
+                <td style="color:${clr};font-size:11px;font-weight:600">${rhl>0?fmtRHL(rhl):'—'}</td>`;
+      }).join('')}
       <td style="color:var(--muted);font-size:11px">🔍</td>
     </tr>`;
   });
