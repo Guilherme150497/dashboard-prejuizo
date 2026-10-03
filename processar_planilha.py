@@ -323,7 +323,7 @@ print(f"   Volumes PM Jan: {vol_pm[0]:.0f}, LP Jan: {vol_lp[0]:.0f}, AB Jan: {vo
 metas={}
 # Linhas que têm meta como VALOR ABSOLUTO R$ por base (não taxa × volume)
 # EP e AG têm meta R$ direta — cols F/G/H são os valores mensais absolutos por base
-META_ABSOLUTA = {'Erro de Programação', 'Diferença de AG'}
+META_ABSOLUTA = {'Erro de Programação'}
 
 for row in rows_bm:
     if not row or len(row) < 6: continue
