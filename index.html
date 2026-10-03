@@ -639,20 +639,24 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     </div>
   </div>
 
-  <!-- ══ MODAL DRILL-DOWN PRODUTOS ══ -->
+  <!-- ══ MODAL DRILL-DOWN ══ -->
   <div id="modal-overlay" onclick="closeModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;backdrop-filter:blur(2px)"></div>
   <div id="modal-prod" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(96vw,1300px);max-height:92vh;background:#131720;border:1px solid #1c2333;border-radius:12px;z-index:1001;overflow:hidden;flex-direction:column">
-    <div style="padding:18px 22px;background:#0c0f14;border-bottom:1px solid #1c2333;display:flex;align-items:center;justify-content:space-between">
-      <div>
+    <!-- Header -->
+    <div style="padding:14px 20px;background:#0c0f14;border-bottom:1px solid #1c2333;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="flex:1;min-width:0">
+        <!-- Breadcrumb -->
+        <div id="modal-breadcrumb" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;color:#5a6a88"></div>
         <div id="modal-title" style="font-size:16px;font-weight:700;color:#e2e8f4"></div>
         <div id="modal-sub" style="font-size:12px;color:#5a6a88;margin-top:2px"></div>
       </div>
-      <button onclick="closeModal()" style="background:none;border:1px solid #1c2333;color:#5a6a88;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px">✕ Fechar</button>
+      <button onclick="closeModal()" style="background:none;border:1px solid #1c2333;color:#5a6a88;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;flex-shrink:0">✕ Fechar</button>
     </div>
+    <!-- Body: pareto + tabela lado a lado -->
     <div style="display:flex;gap:0;flex:1;overflow:hidden">
-      <div style="flex:1;padding:16px;border-right:1px solid #1a2030;overflow-y:auto">
-        <div style="font-size:11px;color:#5a6a88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Pareto de Produtos</div>
-        <div style="height:420px"><canvas id="c-modal-pareto"></canvas></div>
+      <div style="flex:1;padding:16px;border-right:1px solid #1a2030;overflow-y:auto;display:flex;flex-direction:column;gap:8px">
+        <div id="modal-pareto-label" style="font-size:11px;color:#5a6a88;text-transform:uppercase;letter-spacing:.5px">Pareto</div>
+        <div style="flex:1;min-height:0"><canvas id="c-modal-pareto" style="height:100%!important"></canvas></div>
       </div>
       <div style="flex:1;overflow-y:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -3258,47 +3262,198 @@ function renderDiario() {
   get('t-diario').innerHTML=html;
 }
 
-function openDiarioModal(data, dayData, linhaF_arr, deptF) {
+// ── DRILL-DOWN: Dia → Linhas → (Motoristas | Setores | Produtos) ──
+
+// helpers de breadcrumb
+function _bcItem(label, fn) {
+  const s=document.createElement('span');
+  s.style.cssText='cursor:pointer;color:#2d7ef7;transition:color .1s';
+  s.onmouseover=()=>s.style.color='#7eb8ff';
+  s.onmouseout=()=>s.style.color='#2d7ef7';
+  s.textContent=label;
+  if(fn) s.onclick=fn;
+  return s;
+}
+function _bcSep(){const s=document.createElement('span');s.textContent='›';s.style.color='#2a3550';return s;}
+
+// NÍVEL 1: pareto de linhas do dia
+function openDiarioModal(data, _dayData, linhaF_arr, deptF) {
   const {base} = S;
+  const dd = data.split('-').reverse().join('/');
+  // filtro de linhas
   if(!Array.isArray(linhaF_arr)) linhaF_arr = linhaF_arr==='ALL' ? ['ALL'] : [linhaF_arr];
-  const filtered = S.rawDiario.filter(r=>
-    r.data===data && (base==='ALL'||r.base===base) && r.prod &&
+
+  // agrupa por linha a partir de rawDiario
+  const rowsDia = S.rawDiario.filter(r=>
+    r.data===data && (base==='ALL'||r.base===base) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
     (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
   );
-  const map={};
-  filtered.forEach(r=>{
-    map[r.prod]=map[r.prod]||{brl:0,hl:0,linhas:new Set()};
-    map[r.prod].brl+=r.brl; map[r.prod].hl+=r.hl; map[r.prod].linhas.add(r.linha);
+  const mapL={};
+  rowsDia.forEach(r=>{
+    mapL[r.linha]=mapL[r.linha]||{brl:0,hl:0};
+    mapL[r.linha].brl+=r.brl; mapL[r.linha].hl+=r.hl;
   });
-  const sorted=Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,linhas:[...v.linhas].join(', ')})).sort((a,b)=>b.brl-a.brl);
-  const total=sorted.reduce((s,p)=>s+p.brl,0);
-  const dd=data.split('-').reverse().join('/');
-  get('modal-title').textContent=`Produtos — ${dd}`;
-  get('modal-sub').textContent=`${sorted.length} produtos · ${fmtBRL(total)} total`;
-  if(sorted.length>0) setTimeout(()=>makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$'),50);
+  const sortedL=Object.entries(mapL).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl})).sort((a,b)=>b.brl-a.brl);
+  const totalL=sortedL.reduce((s,p)=>s+p.brl,0);
+
+  // breadcrumb: apenas o dia (nível 1)
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(dd, null));
+
+  get('modal-title').textContent=`Linhas — ${dd}`;
+  get('modal-sub').textContent=`${sortedL.length} linhas · ${fmtBRL(totalL)} total`;
+  get('modal-pareto-label').textContent='Pareto de Linhas — clique para detalhar';
+
+  if(sortedL.length>0) {
+    setTimeout(()=>{
+      makePareto('c-modal-pareto', sortedL.slice(0,20), 'nome', 'brl', fmtBRL, 'R$');
+      // torna barras clicáveis
+      const cv=get('c-modal-pareto');
+      cv.style.cursor='pointer';
+      cv.onclick=(e)=>{
+        const inst=CH['c-modal-pareto'];
+        if(!inst) return;
+        const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);
+        if(!pts.length) return;
+        const idx=pts[0].index;
+        const label=inst.data.labels[idx];
+        const match=sortedL.find(l=>l.nome===label);
+        if(match) openDiarioDetalhe(data, dd, match.nome);
+      };
+    },50);
+  }
+
+  // tabela de linhas
   let running=0;
   get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
     <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
-    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Produto</th>
+    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Linha</th>
     <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
     <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
-    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Linha</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HLs</th>
   </tr>`;
+  get('modal-tbody').innerHTML=sortedL.length>0
+    ? sortedL.map((p,i)=>{
+        running+=p.brl; const cum=(running/totalL*100).toFixed(1);
+        const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+        const dept=NOME_TO_DEF[p.nome]?.dept||'';
+        const dclr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+        return `<tr style="border-bottom:1px solid #1a2030;cursor:pointer" onclick="openDiarioDetalhe('${data}','${dd.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}')">
+          <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+          <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">
+            <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dclr};margin-right:6px;vertical-align:middle"></span>${p.nome}
+          </td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Sem registros neste dia.</td></tr>`;
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
+
+// NÍVEL 2: detalhe de uma linha específica
+function openDiarioDetalhe(data, dd, linha) {
+  const {base} = S;
+
+  // breadcrumb: dia clicável + linha atual
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(dd, ()=>openDiarioModal(data,null,'ALL','ALL')));
+  bc.appendChild(_bcSep());
+  bc.appendChild(_bcItem(linha, null));
+
+  get('modal-title').textContent=linha;
+  get('modal-sub').textContent=`Detalhamento — ${dd}`;
+
+  // Reposição Entrega → motoristas (de rawProd)
+  if(linha==='Reposição Entrega') {
+    const rows=S.rawProd.filter(r=>
+      r.linha===linha && (base==='ALL'||r.base===base) &&
+      r.mes===parseInt(data.split('-')[1]) && r.ano===parseInt(data.split('-')[0])
+    );
+    // rawProd não tem campo data, então filtramos pelo mês/ano apenas
+    // caso rawDiario tenha o campo prod mas rawProd tenha motorista, usamos rawProd
+    const mapM={};
+    rows.forEach(r=>{
+      const key=r.motorista||'(sem motorista)';
+      mapM[key]=mapM[key]||{brl:0,hl:0};
+      mapM[key].brl+=r.brl; mapM[key].hl+=r.hl;
+    });
+    const sorted=Object.entries(mapM).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const total=sorted.reduce((s,p)=>s+p.brl,0);
+    get('modal-pareto-label').textContent='Ranking de Motoristas';
+    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');},50);
+    _renderDetalheTabela(sorted, total, ['Motorista','R$','% Acum.','HLs'], p=>`
+      <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">${'{{cum}}'}</td>
+      <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
+    `);
+  }
+  // Trocas Mercado → setores
+  else if(linha==='Trocas Mercado (RN)') {
+    const rows=S.rawProd.filter(r=>
+      r.linha===linha && (base==='ALL'||r.base===base) &&
+      r.mes===parseInt(data.split('-')[1]) && r.ano===parseInt(data.split('-')[0])
+    );
+    const mapS={};
+    rows.forEach(r=>{
+      const key=r.setor||'(sem setor)';
+      mapS[key]=mapS[key]||{brl:0,hl:0};
+      mapS[key].brl+=r.brl; mapS[key].hl+=r.hl;
+    });
+    const sorted=Object.entries(mapS).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const total=sorted.reduce((s,p)=>s+p.brl,0);
+    get('modal-pareto-label').textContent='Ranking de Setores de Venda';
+    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; makePareto('c-modal-pareto',sorted.slice(0,20),'nome','brl',fmtBRL,'R$');},50);
+    _renderDetalheTabela(sorted, total, ['Setor','R$','% Acum.','HLs'], p=>`
+      <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">${'{{cum}}'}</td>
+      <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
+    `);
+  }
+  // Qualquer outra linha → produtos (de rawDiario)
+  else {
+    const rows=S.rawDiario.filter(r=>
+      r.data===data && (base==='ALL'||r.base===base) && r.prod && r.linha===linha
+    );
+    const mapP={};
+    rows.forEach(r=>{
+      mapP[r.prod]=mapP[r.prod]||{brl:0,hl:0};
+      mapP[r.prod].brl+=r.brl; mapP[r.prod].hl+=r.hl;
+    });
+    const sorted=Object.entries(mapP).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const total=sorted.reduce((s,p)=>s+p.brl,0);
+    get('modal-pareto-label').textContent='Pareto de Produtos';
+    if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
+    _renderDetalheTabela(sorted, total, ['Produto','R$','% Acum.','HLs'], p=>`
+      <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">${'{{cum}}'}</td>
+      <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
+    `);
+  }
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
+
+// helper: renderiza thead + tbody com % acumulado
+function _renderDetalheTabela(sorted, total, cols, rowFn) {
+  get('modal-sub').textContent=`${sorted.length} ${cols[0].toLowerCase()}s · ${fmtBRL(total)} total`;
+  get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+    <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+    ${cols.map(c=>`<th style="padding:8px 12px;${c==='R$'||c==='% Acum.'||c==='HLs'?'text-align:right;':'text-align:left;'}color:#5a6a88;font-size:11px">${c}</th>`).join('')}
+  </tr>`;
+  let running=0;
   get('modal-tbody').innerHTML=sorted.length>0
     ? sorted.map((p,i)=>{
         running+=p.brl; const cum=(running/total*100).toFixed(1);
         const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
-        return `<tr style="border-bottom:1px solid #1a2030">
-          <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
-          <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
-          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px">${fmtBRL(p.brl)}</td>
-          <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
-          <td style="padding:7px 12px;color:#5a6a88;font-size:11px">${p.linhas}</td>
-        </tr>`;
+        const cells=rowFn(p).replace(/\{\{clr\}\}/g,clr).replace(/\{\{cum\}\}/g,cum+'%');
+        return `<tr style="border-bottom:1px solid #1a2030"><td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>${cells}</tr>`;
       }).join('')
-    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Sem produtos identificados neste dia.</td></tr>`;
-  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+    : `<tr><td colspan="${cols.length+1}" style="padding:40px;text-align:center;color:#5a6a88">Sem registros.</td></tr>`;
 }
 
 // ═══════════════════════════════════════════════════════
