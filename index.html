@@ -1257,32 +1257,61 @@ function parseMetas(wb) {
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null, raw:true});
   if (rows.length < 3) return;
 
-  // Encontra linhas de volume varrendo a coluna E (idx 4) pelos labels
-  // Volumes estão em colunas F–Q (idx 5–16), 12 meses
+  // Encontra linhas de volume varrendo colunas E (idx4) e F (idx5) pelos labels
+  // Volumes podem estar em F–Q (idx5–16) ou G–R (idx6–17) dependendo do layout
   let volPM=[],volLP=[],volAB=[];
   let firstMetaRow = 6; // fallback
+  console.log('[parseMetas] Primeiras 8 linhas:', rows.slice(0,8).map((r,i)=>`row${i}: E=${r[4]} F=${r[5]} G=${r[6]}`));
   for (let i=0;i<rows.length;i++) {
-    const lbl = String(rows[i][4]||'').trim().toLowerCase();
-    if (lbl.includes('volume tt pm') || lbl.includes('cobeb pm') || lbl.includes('volume pm') || lbl==='pm') {
+    // Tenta label em col E (idx4) e col F (idx5)
+    const lblE = String(rows[i][4]||'').trim().toLowerCase();
+    const lblF = String(rows[i][5]||'').trim().toLowerCase();
+    const isVolPM = s => s.includes('volume tt pm') || (s.includes('cobeb pm') && (s.includes('volume')||s.includes('vol'))) || s.includes('volume pm') || s==='pm';
+    const isVolLP = s => s.includes('volume tt lp') || (s.includes('cobeb lp') && (s.includes('volume')||s.includes('vol'))) || s.includes('volume lp') || s==='lp';
+    const isVolAB = s => s.includes('volume tt ab') || s.includes('rdc ab') || s.includes('abaete') || s.includes('abaeté') || s.includes('volume ab') || s==='ab';
+    // Se label está em col E, valores em idx5+m; se em col F, valores em idx6+m
+    if (isVolPM(lblE)) {
       volPM = Array.from({length:12}, (_,m) => flt(rows[i][5+m]));
-    } else if (lbl.includes('volume tt lp') || lbl.includes('cobeb lp') || lbl.includes('volume lp') || lbl==='lp') {
+      console.log(`[parseMetas] volPM (lblE) row${i}: Jan=${volPM[0]}`);
+    } else if (isVolPM(lblF)) {
+      volPM = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+      console.log(`[parseMetas] volPM (lblF) row${i}: Jan=${volPM[0]}`);
+    } else if (isVolLP(lblE)) {
       volLP = Array.from({length:12}, (_,m) => flt(rows[i][5+m]));
-    } else if (lbl.includes('volume tt ab') || lbl.includes('abaeté') || lbl.includes('rdc ab') || lbl.includes('abaete') || lbl==='ab') {
+      console.log(`[parseMetas] volLP (lblE) row${i}: Jan=${volLP[0]}`);
+    } else if (isVolLP(lblF)) {
+      volLP = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+      console.log(`[parseMetas] volLP (lblF) row${i}: Jan=${volLP[0]}`);
+    } else if (isVolAB(lblE)) {
       volAB = Array.from({length:12}, (_,m) => flt(rows[i][5+m]));
+      console.log(`[parseMetas] volAB (lblE) row${i}: Jan=${volAB[0]}`);
+    } else if (isVolAB(lblF)) {
+      volAB = Array.from({length:12}, (_,m) => flt(rows[i][6+m]));
+      console.log(`[parseMetas] volAB (lblF) row${i}: Jan=${volAB[0]}`);
     }
   }
-  // Fallback: se não achou pelos labels, usa offsets rows[2],[3],[4] col F (idx5)
-  if (!volPM.length || volPM.every(v=>v===0)) volPM = Array.from({length:12}, (_,m) => flt((rows[2]||[])[5+m]));
-  if (!volLP.length || volLP.every(v=>v===0)) volLP = Array.from({length:12}, (_,m) => flt((rows[3]||[])[5+m]));
-  if (!volAB.length || volAB.every(v=>v===0)) volAB = Array.from({length:12}, (_,m) => flt((rows[4]||[])[5+m]));
-  console.log(`Vols META: PM Jan=${(volPM[0]||0).toFixed(0)} LP Jan=${(volLP[0]||0).toFixed(0)} AB Jan=${(volAB[0]||0).toFixed(0)}`);
+  // Fallback: se não achou pelos labels, tenta rows[2],[3],[4] com cols idx5 e idx6
+  const tryFallback = (r, desc) => {
+    // Tenta offset 5, depois 6
+    let arr5 = Array.from({length:12}, (_,m) => flt((r||[])[5+m]));
+    let arr6 = Array.from({length:12}, (_,m) => flt((r||[])[6+m]));
+    const res = arr5.some(v=>v>0) ? arr5 : arr6.some(v=>v>0) ? arr6 : arr5;
+    console.log(`[parseMetas] fallback ${desc}: Jan=${res[0]}`);
+    return res;
+  };
+  if (!volPM.length || volPM.every(v=>v===0)) volPM = tryFallback(rows[2], 'PM rows[2]');
+  if (!volLP.length || volLP.every(v=>v===0)) volLP = tryFallback(rows[3], 'LP rows[3]');
+  if (!volAB.length || volAB.every(v=>v===0)) volAB = tryFallback(rows[4], 'AB rows[4]');
+  console.log(`[parseMetas] Vols finais: PM Jan=${(volPM[0]||0).toFixed(0)} LP Jan=${(volLP[0]||0).toFixed(0)} AB Jan=${(volAB[0]||0).toFixed(0)}`);
 
   const SKIP = new Set(['entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total','meta','janeiro','volume pm','volume lp','volume ab','pm','lp','ab','']);
+  let metasLidas = 0;
   rows.slice(firstMetaRow).forEach((row) => {
     let nome = String(row[4]||'').trim();
     // Só processa linhas reconhecidas pelo NOME_TO_DEF
     if (!nome || SKIP.has(nome.toLowerCase()) || !NOME_TO_DEF[nome]) return;
     const tPM=flt(row[5]), tLP=flt(row[6]), tAB=flt(row[7]);
+    console.log(`[parseMetas] linha "${nome}": tPM=${tPM} tLP=${tLP} tAB=${tAB}`);
     // Diferença de AG: taxa é R$/HL total — multiplica pelo volume TOTAL (PM+LP+AB), não por base separada
     if (nome === 'Diferença de AG') {
       // Se só uma das colunas tem valor, ela contém a taxa R$/HL total
@@ -1309,7 +1338,7 @@ function parseMetas(wb) {
       }
     }
   });
-  console.log(`Metas carregadas: ${Object.keys(S.metas).length} linhas`);
+  console.log(`[parseMetas] Metas carregadas: ${Object.keys(S.metas).length} linhas — ${JSON.stringify(Object.keys(S.metas))}`);
 }
 
 function parseVol(wb) {
