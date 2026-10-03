@@ -1488,9 +1488,15 @@ function getVol(base, ano, mes) {
   }
   return S.vol[base]?.[ano]?.[mes] || 0;
 }
+function getVolParaRHL(base, ano, mes) {
+  // Usa VOLUME_REAL (planilha BASE_METAS) como denominador primário — corresponde ao volume
+  // que a planilha mostra. volEntregue (ops 1+2 da 03.05.17) conta movimentos adicionais
+  // que inflam o denominador ~23%. VOLUME_REAL fica como fonte única para R$/HL.
+  return getVol(base, ano, mes) || getVolEntregue(base, ano, mes);
+}
 function getRHL(nome, base, ano, mes) {
   const brl = getBRL(nome, base, ano, mes);
-  const vol = getVolEntregue(base, ano, mes) || getVol(base, ano, mes);
+  const vol = getVolParaRHL(base, ano, mes);
   return vol > 0 ? brl / vol : 0;
 }
 function getTaxaRHL(nome, base) {
@@ -1501,7 +1507,7 @@ function getMetaRHL(nome, base, ano, mes) {
   const taxa = getTaxaRHL(nome, base);
   if (taxa > 0) return taxa;
   const meta = getMeta(nome, base, ano, mes);
-  const vol  = getVolEntregue(base, ano, mes) || getVol(base, ano, mes);
+  const vol  = getVolParaRHL(base, ano, mes);
   return vol > 0 ? meta / vol : 0;
 }
 function getVolPuxado(base, ano, mes) {
@@ -2093,7 +2099,7 @@ function renderRHL() {
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
   const totBRL=sumBRL2(linhas,base,ano,mesAte);
-  const totVol=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
+  const totVol=sumVol(base,ano,mesAte)||sumVolEntregue(base,ano,mesAte);
   const totRHL=totVol>0?totBRL/totVol:0;
   document.getElementById('kpi-rhl').innerHTML=`
     <div class="kpi amber">
@@ -2130,7 +2136,7 @@ function renderRHL() {
       </div>`;
     }).join('')}
   `;
-  const getVolAcum=(base,ano,mesAte)=>{let s=0;getMs(mesAte).forEach(m=>s+=getVolEntregue(base,ano,m)||getVol(base,ano,m));return s;};
+  const getVolAcum=(base,ano,mesAte)=>{let s=0;getMs(mesAte).forEach(m=>s+=getVolParaRHL(base,ano,m));return s;};
   renderRHLTable('t-rhl', linhas, base, ano, mesAte, getRHL, getMetaRHL, getVolAcum);
   renderRHLChart();
   renderRHLPuxado();
@@ -2143,7 +2149,7 @@ function renderRHLChart() {
   const linhas=linhaF_arr.includes('ALL')?ALL_NOMES:ALL_NOMES.filter(n=>linhaF_arr.includes(n));
   const dataLine=Array.from({length:mesAte},(_,i)=>{
     const brl=linhas.reduce((s,n)=>s+getBRL(n,base,ano,i+1),0);
-    const vol=getVolEntregue(base,ano,i+1)||getVol(base,ano,i+1);
+    const vol=getVolParaRHL(base,ano,i+1);
     return vol>0?brl/vol:0;
   });
   dchart('c-rhl-linha'); const c=get('c-rhl-linha').getContext('2d');
@@ -2232,7 +2238,7 @@ function renderRHLComparativo() {
     (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
-  const volE=sumVolEntregue(base,ano,mesAte)||sumVol(base,ano,mesAte);
+  const volE=sumVol(base,ano,mesAte)||sumVolEntregue(base,ano,mesAte);
   const volP=sumVolPuxado(base,ano,mesAte);
 
   // ── Cards de resumo por departamento ──
