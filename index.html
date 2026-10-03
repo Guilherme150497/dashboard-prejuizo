@@ -3061,19 +3061,23 @@ function renderMotorista() {
   const baseF = document.getElementById('sel-mot-base').value;
   const baseFilter = baseF!=='ALL' ? baseF : (S.base!=='ALL' ? S.base : 'ALL');
 
-  const filtered = S.rawProd.filter(r=>
+  // Usa rawDiario (tem motorista direto em todos os registros) em vez de rawProd
+  const filtered = S.rawDiario.filter(r=>
     r.linha==='Reposição Entrega' &&
-    r.ano===ano && r.mes<=mesAte && mesesSel.includes(r.mes) &&
+    r.data.startsWith(String(ano)) &&
+    mesesSel.includes(parseInt(r.data.split('-')[1])) &&
+    parseInt(r.data.split('-')[1]) <= mesAte &&
     (baseFilter==='ALL'||r.base===baseFilter)
   );
 
   const map = {};
   filtered.forEach(r=>{
-    const k = r.motorista || 'Não Identificado';
-    if(!map[k]) map[k]={brl:0};
+    const k = (r.motorista && r.motorista.trim()) || 'Não Identificado';
+    if(!map[k]) map[k]={brl:0, prods:{}};
     map[k].brl += r.brl;
+    if(r.prod) { map[k].prods[r.prod] = (map[k].prods[r.prod]||0) + r.brl; }
   });
-  const sorted = Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl})).sort((a,b)=>b.brl-a.brl);
+  const sorted = Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
   const total = sorted.reduce((s,p)=>s+p.brl,0);
 
   // KPIs
@@ -3089,13 +3093,9 @@ function renderMotorista() {
 
   // Pareto — clicar no motorista abre pareto de produtos daquele motorista
   makePareto('c-mot-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Motorista', (motNome)=>{
-    const prods={};
-    filtered.filter(r=>(r.motorista||'Não Identificado')===motNome).forEach(r=>{
-      if(!r.prod) return;
-      prods[r.prod]=prods[r.prod]||{brl:0,hl:0};
-      prods[r.prod].brl+=r.brl; prods[r.prod].hl+=r.hl;
-    });
-    const sortedP=Object.entries(prods).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const match = sorted.find(p=>p.nome===motNome);
+    const prodsObj = match ? match.prods : {};
+    const sortedP=Object.entries(prodsObj).map(([k,v])=>({nome:k,brl:v,hl:0})).sort((a,b)=>b.brl-a.brl);
     const tot=sortedP.reduce((s,p)=>s+p.brl,0);
     const bc=get('modal-breadcrumb'); bc.innerHTML='';
     bc.appendChild(_bcItem('Motoristas', ()=>closeModal()));
@@ -3131,7 +3131,7 @@ function renderMotorista() {
   const mesMeses = mesesSel.filter(m=>m<=mesAte);
   const lineDS=top5.map((nome,i)=>({
     label:nome.length>22?nome.substring(0,20)+'…':nome,
-    data:mesMeses.map(m=>filtered.filter(r=>(r.motorista||'Não Identificado')===nome&&r.mes===m).reduce((s,r)=>s+r.brl,0)||null),
+    data:mesMeses.map(m=>filtered.filter(r=>((r.motorista&&r.motorista.trim())||'Não Identificado')===nome&&parseInt(r.data.split('-')[1])===m).reduce((s,r)=>s+r.brl,0)||null),
     borderColor:c5[i],backgroundColor:c5[i]+'22',tension:.4,fill:false,pointRadius:3,pointBackgroundColor:c5[i],spanGaps:true
   }));
   dchart('c-mot-linha'); const cl=get('c-mot-linha').getContext('2d');
