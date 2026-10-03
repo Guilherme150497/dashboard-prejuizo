@@ -1283,11 +1283,30 @@ function parseMetas(wb) {
     // Só processa linhas reconhecidas pelo NOME_TO_DEF
     if (!nome || SKIP.has(nome.toLowerCase()) || !NOME_TO_DEF[nome]) return;
     const tPM=flt(row[5]), tLP=flt(row[6]), tAB=flt(row[7]);
-    for (let m=0; m<12; m++) {
-      [['COBEB PM',tPM,volPM],['COBEB LP',tLP,volLP],['RDC ABAETÉ',tAB,volAB]].forEach(([b,t,vol]) => {
-        const v = Math.round(t*vol[m]*100)/100;
-        if (v>0) { [2025,2026].forEach(y => addM(nome,b,y,m+1,v)); }
-      });
+    // Diferença de AG: taxa é R$/HL total — multiplica pelo volume TOTAL (PM+LP+AB), não por base separada
+    if (nome === 'Diferença de AG') {
+      // Se só uma das colunas tem valor, ela contém a taxa R$/HL total
+      const taxaAG = tPM || tLP || tAB;
+      if (taxaAG > 0) {
+        for (let m=0; m<12; m++) {
+          const totalVol = (volPM[m]||0) + (volLP[m]||0) + (volAB[m]||0);
+          const vTot = Math.round(taxaAG * totalVol * 100) / 100;
+          if (vTot > 0) {
+            // Distribui proporcionalmente por base para que filtros por base funcionem
+            [['COBEB PM',volPM[m]||0],['COBEB LP',volLP[m]||0],['RDC ABAETÉ',volAB[m]||0]].forEach(([b,vol]) => {
+              const vBase = Math.round(taxaAG * vol * 100) / 100;
+              if (vBase > 0) { [2025,2026].forEach(y => addM(nome,b,y,m+1,vBase)); }
+            });
+          }
+        }
+      }
+    } else {
+      for (let m=0; m<12; m++) {
+        [['COBEB PM',tPM,volPM],['COBEB LP',tLP,volLP],['RDC ABAETÉ',tAB,volAB]].forEach(([b,t,vol]) => {
+          const v = Math.round(t*vol[m]*100)/100;
+          if (v>0) { [2025,2026].forEach(y => addM(nome,b,y,m+1,v)); }
+        });
+      }
     }
   });
   console.log(`Metas carregadas: ${Object.keys(S.metas).length} linhas`);
@@ -1622,7 +1641,7 @@ function renderPacote() {
 
   let html = `<table><thead><tr>
     <th class="left">Linha</th>
-    <th>Meta Ano</th><th>Meta Período</th><th>% Part.</th><th>Acumulado Ano</th>
+    <th>Meta Ano</th><th>Meta Período</th><th>Acumulado Ano</th><th>Dispersão</th><th>% Part.</th>
     ${MESES.slice(0,mesAte).filter((_,i)=>S.mesesSel.includes(i+1)).map(m=>`<th>${m}</th>`).join('')}
   </tr></thead><tbody>`;
 
@@ -1645,6 +1664,8 @@ function renderPacote() {
       const base_ = isAG ? totAG : tot;
       const partTot = base_>0 ? (acumFull/base_*100).toFixed(0)+'%' : '0%';
       const cls2 = metaP>0&&acumFull>metaP?'red':'green';
+      const disp = acumFull - metaP;
+      const clrDisp = disp>0?'var(--red)':disp<0?'var(--green)':'var(--muted)';
       dBRL+=acum; dMeta+=metaP; dAcum+=acumFull;
       const meses = MESES.slice(0,mesAte).map((_,i)=>{
         if(!S.mesesSel.includes(i+1)) return '';
@@ -1656,8 +1677,9 @@ function renderPacote() {
         <td class="left">${nome}</td>
         <td>${fmtBRL(metaA)}</td>
         <td>${fmtBRL(metaP)}</td>
-        <td>${partTot}</td>
         <td class="${cls2}"><strong>${fmtBRL(acumFull)}</strong></td>
+        <td style="color:${clrDisp};font-weight:600">${disp>=0?'+':''}${fmtBRL(disp)}</td>
+        <td>${partTot}</td>
         ${meses}
       </tr>`;
     });
@@ -1666,8 +1688,11 @@ function renderPacote() {
       let s=0; ls.forEach(n=>s+=getBRL(n,base,ano,i+1));
       return `<td>${fmtBRL(s,true)}</td>`;
     }).join('');
+    const dDisp=dAcum-dMeta; const dClrDisp=dDisp>0?'var(--red)':dDisp<0?'var(--green)':'var(--muted)';
     html+=`<tr class="total-row"><td class="left">Total ${dept}</td>
-      <td>—</td><td>${fmtBRL(dMeta)}</td><td>—</td><td>${fmtBRL(dAcum)}</td>${mesesD}</tr>`;
+      <td>—</td><td>${fmtBRL(dMeta)}</td><td>${fmtBRL(dAcum)}</td>
+      <td style="color:${dClrDisp};font-weight:700">${dDisp>=0?'+':''}${fmtBRL(dDisp)}</td>
+      <td>—</td>${mesesD}</tr>`;
   });
   html+='</tbody></table>';
   document.getElementById('t-pacote').innerHTML=html;
@@ -3637,20 +3662,81 @@ function openMensalDiaModal(data, dd) {
   openDiarioModal(data, null, 'ALL', 'ALL');
 }
 
+// Nível 1 mensal: abre modal com pareto de linhas do mês/semana (igual ao diário nível 1)
+function openMensalModal(mesSel, semanaSel) {
+  const {base}=S;
+  const deptF = get('sel-mensal-dept')?.value||'ALL';
+  const linhaF_arr = msGetValues('ms-mensal-linha');
+  const rowsMes=S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha))&&(deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF));
+  const rowsFilt=semanaSel==='ALL'?rowsMes:rowsMes.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
+  const mapL={}; rowsFilt.forEach(r=>{ mapL[r.linha]=mapL[r.linha]||{brl:0,hl:0}; mapL[r.linha].brl+=r.brl; mapL[r.linha].hl+=r.hl; });
+  const sortedL=Object.entries(mapL).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+  const totalL=sortedL.reduce((s,p)=>s+p.brl,0);
+  const lblPeriodo=semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel));
+
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(lblPeriodo, null));
+
+  get('modal-title').textContent=`Linhas — ${lblPeriodo}`;
+  get('modal-sub').textContent=`${sortedL.length} linhas · ${fmtBRL(totalL)} total`;
+  get('modal-pareto-label').textContent='Pareto de Linhas — clique para detalhar';
+
+  if(sortedL.length>0) setTimeout(()=>{
+    makePareto('c-modal-pareto', sortedL.slice(0,20), 'nome', 'brl', fmtBRL, 'R$');
+    const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
+    cv.onclick=(e)=>{
+      const inst=CH['c-modal-pareto']; if(!inst) return;
+      const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false); if(!pts.length) return;
+      const lbl=inst.data.labels[pts[0].index];
+      const match=sortedL.find(l=>l.nome===lbl);
+      if(match) openMensalLinhaModal(mesSel,semanaSel,match.nome);
+    };
+  },50);
+
+  let running=0;
+  get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+    <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Linha</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HLs</th>
+  </tr>`;
+  get('modal-tbody').innerHTML=sortedL.length>0
+    ? sortedL.map((p,i)=>{
+        running+=p.brl; const cum=(running/totalL*100).toFixed(1);
+        const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+        const dept=NOME_TO_DEF[p.nome]?.dept||'';
+        const dclr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+        return `<tr style="border-bottom:1px solid #1a2030;cursor:pointer" onclick="openMensalLinhaModal('${mesSel}','${semanaSel}','${p.nome.replace(/'/g,"\\'")}')">
+          <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+          <td style="padding:7px 12px;color:#e2e8f4;font-size:12px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dclr};margin-right:6px;vertical-align:middle"></span>${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Sem registros neste período.</td></tr>`;
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
+
 // Clicou numa LINHA no pareto mensal → abre drill-down de linha para o mês/semana inteiro
 function openMensalLinhaModal(mesSel, semanaSel, linha) {
   const {base}=S;
-  const dd=semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel));
+  const lblPeriodo=semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel));
 
-  // breadcrumb
+  // breadcrumb: mês clicável › [semana clicável ›] linha
   const bc=get('modal-breadcrumb'); bc.innerHTML='';
-  bc.appendChild(_bcItem(mesSel,null));
-  if(semanaSel!=='ALL'){bc.appendChild(_bcSep()); bc.appendChild(_bcItem(lblSemana(parseInt(semanaSel)),null));}
+  bc.appendChild(_bcItem(mesSel, ()=>openMensalModal(mesSel,'ALL')));
+  if(semanaSel!=='ALL'){
+    bc.appendChild(_bcSep());
+    bc.appendChild(_bcItem(lblSemana(parseInt(semanaSel)), ()=>openMensalModal(mesSel,semanaSel)));
+  }
   bc.appendChild(_bcSep());
   bc.appendChild(_bcItem(linha,null));
 
+  const lblPer=semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel));
   get('modal-title').textContent=linha;
-  get('modal-sub').textContent=`Detalhamento — ${dd}`;
+  get('modal-sub').textContent=`Detalhamento — ${lblPer}`;
 
   const mes=parseInt(mesSel.split('-')[1]), anoD=parseInt(mesSel.split('-')[0]);
 
