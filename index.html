@@ -3997,18 +3997,20 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
 
   // Helper: agrupa rawDiario do período (mês ou semana) por chave (motorista/setor)
   function _agrupaMensalPorChave(chaveField) {
-    let rowsDia = S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&r.linha===linha&&r.prod);
+    // NÃO filtra por r.prod — inclui todos os registros da linha para não perder prejuízo
+    let rowsDia = S.rawDiario.filter(r=>r.data.startsWith(mesSel)&&(base==='ALL'||r.base===base)&&r.linha===linha);
     if(semanaSel!=='ALL') rowsDia = rowsDia.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
-    // usa rawProd do mês como lookup prod→chave
+    // lookup prod→chave via rawProd (usado como fallback para registros sem campo direto)
     const prodChave = {};
     S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD)
       .forEach(r=>{ if(r.prod && r[chaveField]) prodChave[r.prod]=r[chaveField]; });
     const map = {};
     rowsDia.forEach(r=>{
-      const k = prodChave[r.prod] || '(não identificado)';
+      // prioridade: campo direto em rawDiario (motorista/setor), depois lookup via prod, depois não identificado
+      const k = (r[chaveField] && r[chaveField].trim()) || prodChave[r.prod] || '(não identificado)';
       map[k] = map[k] || {brl:0,hl:0,prods:{}};
       map[k].brl += r.brl; map[k].hl += r.hl;
-      map[k].prods[r.prod||'?'] = (map[k].prods[r.prod||'?']||0) + r.brl;
+      if(r.prod) map[k].prods[r.prod] = (map[k].prods[r.prod]||0) + r.brl;
     });
     return Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl,hl:v.hl,prods:v.prods})).sort((a,b)=>b.brl-a.brl);
   }
@@ -4023,9 +4025,10 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
   }
 
   if(linha==='Reposição Entrega') {
-    // tenta agrupamento por motorista; se não tiver dados cai no agrupamento por data
+    // tenta agrupamento por motorista; se nenhum motorista identificado, cai no agrupamento por data
     const sortedMot=_agrupaMensalPorChave('motorista');
-    if(sortedMot.length>0) {
+    const temMotorista = sortedMot.some(p=>p.nome!=='(não identificado)');
+    if(temMotorista) {
       const total=sortedMot.reduce((s,p)=>s+p.brl,0);
       get('modal-pareto-label').textContent='Ranking de Motoristas — clique para ver produtos';
       setTimeout(()=>{
@@ -4044,7 +4047,8 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
     }
   } else if(linha==='Trocas Mercado (RN)') {
     const sortedSet=_agrupaMensalPorChave('setor');
-    if(sortedSet.length>0) {
+    const temSetor = sortedSet.some(p=>p.nome!=='(não identificado)');
+    if(temSetor) {
       const total=sortedSet.reduce((s,p)=>s+p.brl,0);
       get('modal-pareto-label').textContent='Ranking de Setores — clique para ver produtos';
       setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='pointer';makePareto('c-modal-pareto',sortedSet.slice(0,20),'nome','brl',fmtBRL,'R$');cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedSet.find(s=>s.nome===lbl);if(match)openMensalNivel3(mesSel,semanaSel,lblPeriodo,linha,lbl,'setor',match.prods);};},50);
