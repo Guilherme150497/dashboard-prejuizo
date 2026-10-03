@@ -3998,49 +3998,6 @@ function renderMensal() {
       scales:{x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.4)'}}}}
   });
 
-  // ── Gráfico R$/HL por semana ──
-  // HL vendido por semana (wqiDiario, todas as bases, mês selecionado)
-  const bases2m = base==='ALL' ? Object.keys(S.wqiDiario||{}) : [base];
-  const hlPorSem={};
-  bases2m.forEach(b=>{
-    Object.entries(S.wqiDiario[b]||{}).filter(([d])=>d.startsWith(mesSel)).forEach(([d,v])=>{
-      const s=semanaDoMes(d); hlPorSem[s]=(hlPorSem[s]||0)+v.hl_vend;
-    });
-  });
-  // Meta R$/HL mensal = meta_brl / hl_vend_total do mês
-  const hlVendMesTotMens = Object.values(hlPorSem).reduce((s,v)=>s+v,0);
-  const metaRHLMens = hlVendMesTotMens>0 ? metaMensal/hlVendMesTotMens : 0;
-  const rhlPorSem = semsAll.map(s=>{
-    const hl = hlPorSem[s]||0;
-    return hl>0 ? (semMap[s]||0)/hl : null;
-  });
-  const rhlBarColors = rhlPorSem.map(v=> v===null?'rgba(93,138,255,.3)': v>metaRHLMens&&metaRHLMens>0?'rgba(239,68,68,.75)':'rgba(34,197,94,.75)');
-  dchart('c-mensal-rhl'); const ctxRHLM=get('c-mensal-rhl').getContext('2d');
-  CH['c-mensal-rhl']=new Chart(ctxRHLM,{
-    type:'bar',
-    data:{labels:semsAll.map(s=>lblSemana(s)),
-      datasets:[
-        {label:'R$/HL Realizado',data:rhlPorSem,
-          backgroundColor:rhlBarColors,borderRadius:4,borderSkipped:false,order:2},
-        {type:'line',label:`Meta R$/HL (${metaRHLMens>0?fmtRHL(metaRHLMens):'—'})`,
-          data:semsAll.map(()=>metaRHLMens>0?metaRHLMens:null),
-          borderColor:'rgba(255,200,50,.85)',backgroundColor:'transparent',
-          borderWidth:2,borderDash:[6,4],pointRadius:0,tension:0,order:1}
-      ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{
-        legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:11},boxWidth:14,padding:12}},
-        tooltip:{mode:'index',intersect:false,callbacks:{
-          label:c=>c.raw===null?null:c.datasetIndex===0?`R$/HL: ${fmtRHL(c.raw)}`:`Meta: ${fmtRHL(c.raw)}`
-        },backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}
-      },
-      scales:{
-        x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},
-        y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtRHL(v)},grid:{color:'rgba(48,54,61,.4)'},min:0}
-      }
-    }
-  });
-
   // ── Pareto por linha ──
   const linhaMap={}; rowsFilt.forEach(r=>{ linhaMap[r.linha]=(linhaMap[r.linha]||{brl:0,hl:0}); linhaMap[r.linha].brl+=r.brl; linhaMap[r.linha].hl+=r.hl; });
   const paretoItems=Object.entries(linhaMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
@@ -4073,6 +4030,47 @@ function renderMensal() {
   });
   // Meta por semana = proporcional aos dias úteis da semana
   function metaSemana(sem){ return metaMensal * ((diasUteisPorSem[sem]||0)/totalDiasUteis); }
+
+  // ── Gráfico R$/HL por semana ──
+  const bases2m = base==='ALL' ? Object.keys(S.wqiDiario||{}) : [base];
+  const hlPorSem={};
+  bases2m.forEach(b=>{
+    Object.entries(S.wqiDiario[b]||{}).filter(([d])=>d.startsWith(mesSel)).forEach(([d,v])=>{
+      const s=semanaDoMes(d); hlPorSem[s]=(hlPorSem[s]||0)+v.hl_vend;
+    });
+  });
+  const hlVendMesTotMens = Object.values(hlPorSem).reduce((s,v)=>s+v,0);
+  const metaRHLMens = hlVendMesTotMens>0 ? metaMensal/hlVendMesTotMens : 0;
+  const rhlPorSem = semsAll.map(s=>{
+    const hl = hlPorSem[s]||0;
+    return hl>0 ? (semMap[s]||0)/hl : null;
+  });
+  const rhlBarColors = rhlPorSem.map(v=> v===null?'rgba(93,138,255,.3)': v>metaRHLMens&&metaRHLMens>0?'rgba(239,68,68,.75)':'rgba(34,197,94,.75)');
+  dchart('c-mensal-rhl'); const ctxRHLM=get('c-mensal-rhl').getContext('2d');
+  CH['c-mensal-rhl']=new Chart(ctxRHLM,{
+    type:'bar',
+    data:{labels:semsAll.map(s=>lblSemana(s)),
+      datasets:[
+        {label:'R$/HL Realizado',data:rhlPorSem,
+          backgroundColor:rhlBarColors,borderRadius:4,borderSkipped:false,order:2},
+        {type:'line',label:`Meta R$/HL (${metaRHLMens>0?fmtRHL(metaRHLMens):'—'})`,
+          data:semsAll.map(()=>metaRHLMens>0?metaRHLMens:null),
+          borderColor:'rgba(255,200,50,.85)',backgroundColor:'transparent',
+          borderWidth:2,borderDash:[6,4],pointRadius:0,tension:0,order:1}
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:11},boxWidth:14,padding:12}},
+        tooltip:{mode:'index',intersect:false,callbacks:{
+          label:c=>c.raw===null?null:c.datasetIndex===0?`R$/HL: ${fmtRHL(c.raw)}`:`Meta: ${fmtRHL(c.raw)}`
+        },backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}
+      },
+      scales:{
+        x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtRHL(v)},grid:{color:'rgba(48,54,61,.4)'},min:0}
+      }
+    }
+  });
 
   // Agrupa por semana para subtotais
   const semMap2={};
