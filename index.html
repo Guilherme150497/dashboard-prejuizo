@@ -308,39 +308,59 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
 
   <!-- ══ VISÃO HL ══ -->
   <div class="section" id="s-hl">
-    <div class="kpi-row" id="kpi-hl"></div>
-    <div class="panel">
-      <div class="panel-head">
-        <div><div class="panel-title">HL Perdido por Linha</div><div class="panel-sub">Mês a mês</div></div>
-        <div style="display:flex;gap:6px">
-          <select id="sel-dept-hl" onchange="renderHL()">
-            <option value="ALL">Todos os depart.</option>
-            <option value="Entrega">Entrega</option>
-            <option value="Armazém">Armazém</option>
-            <option value="Puxada">Puxada</option>
-            <option value="Diferença de AG">Diferença de AG</option>
+    <!-- Cabeçalho com filtros -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">Visão <span style="color:var(--blue)">HL Perdido</span></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Hectolitros de produto perdido por linha e departamento</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="sel-dept-hl" onchange="renderHL()">
+          <option value="ALL">Todos os depart.</option>
+          <option value="Entrega">Entrega</option>
+          <option value="Armazém">Armazém</option>
+          <option value="Puxada">Puxada</option>
+          <option value="Diferença de AG">Diferença de AG</option>
           <option value="Erro de Programação">Erro de Programação</option>
-          </select>
-          <div class="ms-wrap" id="ms-linha-hl"><button class="ms-btn">Todas as linhas</button><div class="ms-dropdown"></div></div>
-        </div>
-      </div>
-      <div class="panel-body no-pad"><div class="tw" id="t-hl"></div></div>
-    </div>
-    <div class="g2">
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">Evolução HL — Linha selecionada</div></div>
-        <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-hl-linha"></canvas></div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">Top 10 Produtos por HL</div><div class="panel-sub" id="hl-prod-sub">Linha selecionada</div></div>
-        <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-hl-prod"></canvas></div></div>
+        </select>
+        <div class="ms-wrap" id="ms-linha-hl"><button class="ms-btn">Todas as linhas</button><div class="ms-dropdown"></div></div>
       </div>
     </div>
+
+    <!-- KPI tiles grandes -->
+    <div class="kpi-row" id="kpi-hl"></div>
+
+    <!-- Ranking horizontal por linha + evolução mensal lado a lado -->
+    <div class="g2" style="grid-template-columns:1fr 1fr">
+      <div class="panel">
+        <div class="panel-head"><div><div class="panel-title">Ranking por Linha</div><div class="panel-sub">HL perdido acumulado · barras horizontais</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:320px"><canvas id="c-hl-ranking"></canvas></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="panel-title">Evolução Mensal</div><div class="panel-sub" id="hl-evol-sub">Total acumulado mês a mês</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:320px"><canvas id="c-hl-linha"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- Donut por dept + Top produtos -->
+    <div class="g2" style="grid-template-columns:1fr 2fr">
+      <div class="panel">
+        <div class="panel-head"><div><div class="panel-title">% por Departamento</div><div class="panel-sub">Participação de HL por dept</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:260px"><canvas id="c-hl-donut"></canvas></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="panel-title">Top 15 Produtos por HL</div><div class="panel-sub" id="hl-prod-sub">Linha selecionada</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:260px"><canvas id="c-hl-prod"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- Heatmap tabela mensal detalhada (colapsável) -->
     <div class="panel">
-      <div class="panel-head">
-        <div><div class="panel-title">Reposição Entrega e Trocas — por Motorista</div><div class="panel-sub">Ranking de R$ por motorista · Set/2026+</div></div>
+      <div class="panel-head" style="cursor:pointer" onclick="this.nextElementSibling.classList.toggle('hidden')">
+        <div><div class="panel-title">Detalhe Mensal por Linha</div><div class="panel-sub">Heatmap de intensidade · clique para expandir</div></div>
+        <span style="color:var(--muted);font-size:18px">⊕</span>
       </div>
-      <div class="panel-body no-pad"><div class="tw" id="t-hl-motorista"></div></div>
+      <div class="panel-body no-pad hidden"><div class="tw" id="t-hl"></div></div>
     </div>
   </div>
 
@@ -1685,145 +1705,150 @@ function renderHL() {
   const df=document.getElementById('sel-dept-hl').value;
   const linhas=ALL_NOMES.filter(n=>df==='ALL'||NOME_TO_DEF[n].dept===df);
 
+  // ── Totais ──────────────────────────────────────────
   let totHL=0; linhas.forEach(n=>totHL+=sumHL(n,base,ano,mesAte));
+  const deptHL={};
+  DEPTS.forEach(d=>{let s=0;ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d).forEach(n=>s+=sumHL(n,base,ano,mesAte));deptHL[d]=s;});
 
-  // KPI cards por departamento — mesmo layout do R$/HL
+  // ── KPI tiles grandes ────────────────────────────────
+  const DEPT_KPI_CLR={Entrega:'var(--amber)',Armazém:'var(--blue)',Puxada:'var(--green)'};
   document.getElementById('kpi-hl').innerHTML=`
-    <div class="kpi blue" style="display:flex;flex-direction:column;gap:6px">
+    <div class="kpi" style="border-left:3px solid var(--blue);grid-column:span 1">
       <div class="kpi-label">Total HL Perdido</div>
-      <div class="kpi-value">${fmtHL(totHL)} HL</div>
-      <div class="kpi-sub">Acumulado até ${MESES[mesAte-1]}/${ano}</div>
+      <div class="kpi-value" style="font-size:28px;color:var(--blue)">${fmtHL(totHL)}</div>
+      <div class="kpi-sub">HL acumulado até ${MESES[mesAte-1]}/${ano}</div>
     </div>
     ${DEPTS.map(d=>{
-      let s=0; ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d).forEach(n=>s+=sumHL(n,base,ano,mesAte));
-      const pct=totHL>0?s/totHL:0;
-      const barClr=pct>0.5?'var(--red)':pct>0.25?'var(--amber)':'var(--green)';
-      const clr=d==='Entrega'?'amber':d==='Armazém'?'blue':'green';
-      const prev=totHL>0?(pct*100).toFixed(1)+'%':'—';
-      const simClr=pct>0.5?'var(--red)':pct>0.25?'var(--amber)':'var(--green)';
-      return`<div class="kpi ${clr}" style="display:flex;flex-direction:column;gap:6px">
-        <div class="kpi-label">HL ${d}</div>
-        <div class="kpi-value">${fmtHL(s)} HL</div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="height:4px;background:var(--s1);border-radius:2px;overflow:hidden">
-            <div style="height:100%;width:${Math.min(pct*100,100)}%;background:${barClr};border-radius:2px;transition:width .4s"></div>
+      const s=deptHL[d]||0;
+      const pct=totHL>0?(s/totHL*100).toFixed(1):'0';
+      const clr=DEPT_KPI_CLR[d]||'var(--text)';
+      const barW=totHL>0?Math.round(s/totHL*100):0;
+      return`<div class="kpi" style="border-left:3px solid ${clr}">
+        <div class="kpi-label">${d}</div>
+        <div class="kpi-value" style="font-size:22px;color:${clr}">${fmtHL(s)}</div>
+        <div style="margin-top:8px">
+          <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:4px">
+            <div style="height:100%;width:${barW}%;background:${clr};border-radius:2px"></div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:10px;color:var(--muted)">${prev} do total</span>
-            <span style="font-size:10px;font-weight:700;color:${simClr}">${pct>0.5?'▲ alto impacto':pct>0.25?'▲ médio':'▼ baixo'}</span>
-          </div>
+          <div class="kpi-sub">${pct}% do total</div>
         </div>
       </div>`;
     }).join('')}
   `;
 
-  // Tabela com "barrilhas" — heatmap de cor por intensidade de valor
-  const allHL=linhas.map(n=>sumHL(n,base,ano,mesAte));
-  const maxHL=Math.max(...allHL,0.0001);
-
-  // Máximo por coluna de mês para coloração relativa
-  const msList=getMs(mesAte);
-  const maxByMes=msList.map(m=>{
-    let mx=0; linhas.forEach(n=>{const v=getHL(n,base,ano,m);if(v>mx)mx=v;}); return mx||0.0001;
+  // ── Ranking horizontal por linha ─────────────────────
+  const rankData=linhas.map(n=>({nome:n,hl:sumHL(n,base,ano,mesAte),dept:NOME_TO_DEF[n]?.dept}))
+    .filter(r=>r.hl>0).sort((a,b)=>b.hl-a.hl);
+  const rankClrs=rankData.map(r=>{
+    const d=r.dept;
+    if(d==='Entrega') return'rgba(245,158,11,.8)';
+    if(d==='Armazém') return'rgba(45,126,247,.8)';
+    if(d==='Puxada') return'rgba(34,197,94,.8)';
+    return'rgba(167,139,250,.8)';
   });
-
-  function heatColor(v,maxV) {
-    if(!v||v<=0) return null;
-    const p=v/maxV;
-    if(p>=0.8) return {bg:'rgba(248,81,73,.22)',clr:'#ff8080'};
-    if(p>=0.6) return {bg:'rgba(240,163,10,.18)',clr:'#f59e0b'};
-    if(p>=0.4) return {bg:'rgba(240,163,10,.10)',clr:'#fbbf24'};
-    if(p>=0.2) return {bg:'rgba(45,126,247,.12)',clr:'#7ab4ff'};
-    return {bg:'transparent',clr:'var(--muted)'};
-  }
-
-  let html=`<table><thead><tr>
-    <th class="left" style="min-width:160px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)"><span style="width:3px;height:14px;background:var(--accent);border-radius:2px;display:inline-block"></span>Linha</span></th>
-    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Acumulado HL</span></th>
-    <th><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">% do Total</span></th>
-    ${msList.map(m=>`<th><span style="font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--muted)">${MESES[m-1].slice(0,3).toUpperCase()}</span></th>`).join('')}
-  </tr></thead><tbody>`;
-
-  let lastDept='';
-  linhas.forEach((nome,idx)=>{
-    const def=NOME_TO_DEF[nome];
-    const dept=def?.dept||'';
-    if(dept!==lastDept){
-      lastDept=dept;
-      const deptClr=DEPT_C[dept]||'#a78bfa';
-      html+=`<tr><td colspan="${3+msList.length}" style="padding:10px 12px 4px;background:var(--s1)">
-        <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${deptClr};display:inline-flex;align-items:center;gap:6px">
-          <span style="width:6px;height:6px;border-radius:50%;background:${deptClr};display:inline-block"></span>${dept}
-        </span>
-      </td></tr>`;
+  dchart('c-hl-ranking'); const cR=get('c-hl-ranking').getContext('2d');
+  CH['c-hl-ranking']=new Chart(cR,{
+    type:'bar',
+    data:{labels:rankData.map(r=>r.nome),datasets:[{data:rankData.map(r=>r.hl),backgroundColor:rankClrs,borderRadius:4}]},
+    options:{
+      ...coBase(),indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
+      scales:{
+        x:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(1)+' HL'},grid:{color:'rgba(48,54,61,.4)'}},
+        y:{ticks:{color:'#e2e8f4',font:{size:11},padding:4},grid:{display:false}}
+      }
     }
-    const acum=allHL[idx];
-    const pctAcum=totHL>0?acum/totHL:0;
-    const acumHC=heatColor(acum,maxHL);
-    const ms=msList.map((m,mi)=>{
-      const v=getHL(nome,base,ano,m);
-      const hc=heatColor(v,maxByMes[mi]);
-      if(!v||v<=0) return`<td style="color:var(--muted);font-size:11px;text-align:center">—</td>`;
-      return`<td title="${fmtHL(v)} HL" style="background:${hc?hc.bg:'transparent'};color:${hc?hc.clr:'var(--muted)'};font-size:11px;font-weight:600;text-align:center;border-radius:3px">${fmtHL(v)}</td>`;
-    }).join('');
-    html+=`<tr>
-      <td class="left" style="font-size:12px;font-weight:500">${nome}</td>
-      <td style="background:${acumHC?acumHC.bg:'transparent'};color:${acumHC?acumHC.clr:'var(--muted)'};font-size:12px;font-weight:700;border-radius:3px">${acum>0?fmtHL(acum):'—'}</td>
-      <td style="color:var(--muted);font-size:11px">${acum>0?(pctAcum*100).toFixed(1)+'%':'—'}</td>
-      ${ms}
-    </tr>`;
   });
-  html+='</tbody></table>';
-  document.getElementById('t-hl').innerHTML=html;
-  renderHLChart();
-  renderHLMotorista();
-}
 
-function renderHLChart() {
-  const {base,ano,mesAte}=S;
+  // ── Evolução mensal ─────────────────────────────────
   const linhaF_arr=msGetValues('ms-linha-hl');
-  const linhas=linhaF_arr.includes('ALL')?ALL_NOMES:ALL_NOMES.filter(n=>linhaF_arr.includes(n));
+  const linhasEv=linhaF_arr.includes('ALL')?linhas:linhas.filter(n=>linhaF_arr.includes(n));
+  const evolData=getMs(mesAte).map(m=>{let s=0;linhasEv.forEach(n=>s+=getHL(n,base,ano,m));return s;});
+  get('hl-evol-sub').textContent=linhaF_arr.includes('ALL')?'Todas as linhas':linhaF_arr.join(', ');
+  const maxEv=Math.max(...evolData,0);
+  const evolClrs=evolData.map(v=>v>=maxEv*0.8?'rgba(239,68,68,.85)':v>=maxEv*0.5?'rgba(245,158,11,.8)':'rgba(45,126,247,.75)');
+  dchart('c-hl-linha'); const cL=get('c-hl-linha').getContext('2d');
+  CH['c-hl-linha']=new Chart(cL,{
+    type:'bar',
+    data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[
+      {type:'line',label:'Tendência',data:evolData,borderColor:'rgba(255,255,255,.3)',borderWidth:1.5,pointRadius:0,tension:.4,fill:false,order:0},
+      {label:'HL',data:evolData,backgroundColor:evolClrs,borderRadius:4,order:1}
+    ]},
+    options:{...coBase(),
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
+      scales:{
+        x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(1)},grid:{color:'rgba(48,54,61,.4)'}}
+      }
+    }
+  });
 
-  const data=getMs(mesAte).map(m=>{let s=0;linhas.forEach(n=>s+=getHL(n,base,ano,m));return s;});
-  dchart('c-hl-linha'); const c=get('c-hl-linha').getContext('2d');
-  CH['c-hl-linha']=new Chart(c,{type:'line',data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{label:'HL',data,borderColor:'#2d7ef7',backgroundColor:'rgba(88,166,255,.1)',tension:.4,fill:true,pointRadius:5,pointBackgroundColor:'#2d7ef7',pointBorderColor:'#0c0f14',pointBorderWidth:2}]},options:{...coBase(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#2d7ef7',borderColor:'#1c2333',borderWidth:1}}}});
+  // ── Donut por departamento ────────────────────────────
+  dchart('c-hl-donut'); const cD=get('c-hl-donut').getContext('2d');
+  const donutVals=DEPTS.map(d=>deptHL[d]||0);
+  CH['c-hl-donut']=new Chart(cD,{
+    type:'doughnut',
+    data:{labels:DEPTS,datasets:[{data:donutVals,backgroundColor:[DEPT_C.Entrega,DEPT_C.Armazém,DEPT_C.Puxada],borderColor:'#0c0f14',borderWidth:3,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'bottom',labels:{color:'#5a6a88',font:{size:11},padding:14,boxWidth:12}},
+        tooltip:{callbacks:{label:c=>`${c.label}: ${fmtHL(c.raw)} HL (${totHL>0?(c.raw/totHL*100).toFixed(1):'0'}%)`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}}}
+  });
 
-  // Top 10 produtos HL (rawProd tem HL apenas para linhas com HL — Reposição/Trocas = 0)
+  // ── Top 15 produtos por HL ───────────────────────────
   const prodMapHL={};
   S.rawProd.filter(r=>(base==='ALL'||r.base===base)&&r.ano===ano&&r.mes<=mesAte&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha))&&r.hl>0)
     .forEach(r=>{prodMapHL[r.prod]=(prodMapHL[r.prod]||0)+r.hl;});
-  const sortedHL=Object.entries(prodMapHL).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  document.getElementById('hl-prod-sub').textContent = linhaF_arr.includes('ALL')?'Todas as linhas':linhaF_arr.join(', ');
+  const sortedHL=Object.entries(prodMapHL).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  get('hl-prod-sub').textContent=linhaF_arr.includes('ALL')?'Todas as linhas':linhaF_arr.join(', ');
   dchart('c-hl-prod'); const cp=get('c-hl-prod').getContext('2d');
-  const hlColors=sortedHL.map((_,i)=>{const p=i/Math.max(sortedHL.length-1,1);return p<0.33?'rgba(248,81,73,.85)':p<0.66?'rgba(240,163,10,.85)':'rgba(45,126,247,.8)';});
   if(sortedHL.length===0){
     get('c-hl-prod').style.display='none';
     const par=get('c-hl-prod').parentNode;
     if(!par.querySelector('.no-data-msg')){const m=document.createElement('div');m.className='no-data-msg';m.style.cssText='padding:40px;text-align:center;color:var(--muted);font-size:13px';m.textContent='Sem dados de produto HL (Reposição/Trocas não têm HL)';par.appendChild(m);}
-    return;
-  }
-  get('c-hl-prod').style.display='';
-  get('c-hl-prod').parentNode.querySelector('.no-data-msg')?.remove();
-  CH['c-hl-prod']=new Chart(cp,{
-    type:'bar',
-    data:{
-      labels:sortedHL.map(p=>p[0].length>30?p[0].substring(0,28)+'…':p[0]),
-      datasets:[{data:sortedHL.map(p=>p[1]),backgroundColor:hlColors,borderRadius:3}]
-    },
-    options:{
-      ...coBase(),indexAxis:'y',
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#2d7ef7',borderColor:'#1c2333',borderWidth:1},
-        datalabels:{display:false}
-      },
-      scales:{
-        x:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(2)+' HL'},grid:{color:'rgba(48,54,61,.4)'}},
-        y:{ticks:{color:'#e2e8f4',font:{size:11}},grid:{display:false}}
+  } else {
+    get('c-hl-prod').style.display='';
+    get('c-hl-prod').parentNode.querySelector('.no-data-msg')?.remove();
+    const pHlClrs=sortedHL.map((_,i)=>{const p=i/Math.max(sortedHL.length-1,1);return p<0.33?'rgba(248,81,73,.85)':p<0.66?'rgba(240,163,10,.8)':'rgba(45,126,247,.75)';});
+    CH['c-hl-prod']=new Chart(cp,{
+      type:'bar',
+      data:{labels:sortedHL.map(p=>p[0].length>32?p[0].substring(0,30)+'…':p[0]),datasets:[{data:sortedHL.map(p=>p[1]),backgroundColor:pHlClrs,borderRadius:3}]},
+      options:{...coBase(),indexAxis:'y',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
+        scales:{x:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(2)+' HL'},grid:{color:'rgba(48,54,61,.4)'}},y:{ticks:{color:'#e2e8f4',font:{size:10}},grid:{display:false}}}
       }
-    }
+    });
+  }
+
+  // ── Heatmap tabela (colapsável) ───────────────────────
+  const allHL2=linhas.map(n=>sumHL(n,base,ano,mesAte));
+  const maxHL2=Math.max(...allHL2,0.0001);
+  const msList=getMs(mesAte);
+  const maxByMes=msList.map(m=>{let mx=0;linhas.forEach(n=>{const v=getHL(n,base,ano,m);if(v>mx)mx=v;});return mx||0.0001;});
+  function heatColor(v,maxV){if(!v||v<=0)return null;const p=v/maxV;if(p>=0.8)return{bg:'rgba(248,81,73,.22)',clr:'#ff8080'};if(p>=0.6)return{bg:'rgba(240,163,10,.18)',clr:'#f59e0b'};if(p>=0.4)return{bg:'rgba(240,163,10,.10)',clr:'#fbbf24'};if(p>=0.2)return{bg:'rgba(45,126,247,.12)',clr:'#7ab4ff'};return{bg:'transparent',clr:'var(--muted)'};}
+  let html=`<table><thead><tr>
+    <th class="left" style="min-width:160px">Linha</th>
+    <th>Acumulado HL</th><th>% Total</th>
+    ${msList.map(m=>`<th>${MESES[m-1].slice(0,3).toUpperCase()}</th>`).join('')}
+  </tr></thead><tbody>`;
+  let lastDept='';
+  linhas.forEach((nome,idx)=>{
+    const dept=NOME_TO_DEF[nome]?.dept||'';
+    if(dept!==lastDept){lastDept=dept;const dC=DEPT_C[dept]||'#a78bfa';
+      html+=`<tr><td colspan="${3+msList.length}" class="dept" style="color:${dC};border-top:1px solid ${dC}33">${dept}</td></tr>`;}
+    const acum=allHL2[idx];const pctA=totHL>0?acum/totHL:0;const acumHC=heatColor(acum,maxHL2);
+    const ms=msList.map((m,mi)=>{const v=getHL(nome,base,ano,m);const hc=heatColor(v,maxByMes[mi]);
+      if(!v||v<=0)return`<td style="color:var(--muted);font-size:11px">—</td>`;
+      return`<td style="background:${hc?hc.bg:'transparent'};color:${hc?hc.clr:'var(--muted)'};font-size:11px;font-weight:600;border-radius:3px">${fmtHL(v)}</td>`;
+    }).join('');
+    html+=`<tr><td class="left" style="font-size:12px">${nome}</td>
+      <td style="background:${acumHC?acumHC.bg:'transparent'};color:${acumHC?acumHC.clr:'var(--muted)'};font-weight:700;font-size:12px;border-radius:3px">${acum>0?fmtHL(acum):'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${acum>0?(pctA*100).toFixed(1)+'%':'—'}</td>${ms}</tr>`;
   });
+  html+='</tbody></table>';
+  document.getElementById('t-hl').innerHTML=html;
 }
+
+// renderHLChart removida — lógica incorporada em renderHL()
 
 function renderHLMotorista() {
   const {base,ano,mesAte}=S;
