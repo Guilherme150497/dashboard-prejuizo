@@ -3879,7 +3879,7 @@ function fillSelects() {
   });
   // Multi-selects
   ['ms-linha-hl','ms-me-linha','ms-diario-linha','ms-linha-rhl','ms-linha-prod'].forEach(id=>{
-    const fn={'ms-linha-hl':renderHLChart,'ms-me-linha':renderMarcaEmbal,'ms-diario-linha':renderDiario,'ms-linha-rhl':renderRHLChart,'ms-linha-prod':renderProd}[id];
+    const fn={'ms-linha-hl':renderHL,'ms-me-linha':renderMarcaEmbal,'ms-diario-linha':renderDiario,'ms-linha-rhl':renderRHLChart,'ms-linha-prod':renderProd}[id];
     msCreate(id, fn);
     msPopulate(id, ALL_NOMES);
   });
