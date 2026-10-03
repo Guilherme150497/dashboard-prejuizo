@@ -2110,9 +2110,17 @@ function renderRHL() {
     ${DEPTS.map(d=>{
       const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(n)));
       const brl=sumBRL2(ls,base,ano,mesAte);
-      const metaBRL=ls.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
       const rhl=totVol>0?brl/totVol:0;
-      const metaRHL=totVol>0?metaBRL/totVol:0;
+      // Meta R$/HL do departamento: soma as taxas diretas de cada linha (taxaRHL),
+      // que é a mesma lógica usada na tabela individual. Se a linha não tem taxa direta,
+      // usa meta BRL acumulada / vol acumulado como fallback.
+      const volAcumDept=(()=>{let s=0;getMs(mesAte).forEach(m=>s+=getVolParaRHL(base,ano,m));return s;})();
+      const metaRHL=ls.reduce((s,n)=>{
+        const taxa=getTaxaRHL(n,base);
+        if(taxa>0) return s+taxa;
+        const mb=sumMeta(n,base,ano,mesAte);
+        return s+(volAcumDept>0?mb/volAcumDept:0);
+      },0);
       const pct=metaRHL>0?Math.min(rhl/metaRHL*100,200):0;
       const barClr=pct>100?'var(--red)':pct>85?'var(--amber)':'var(--green)';
       const simbolo=metaRHL>0?(rhl>metaRHL?'▲ acima da meta':'▼ abaixo da meta'):'sem meta';
@@ -2193,9 +2201,15 @@ function renderRHLPuxado() {
     ${DEPTS.map(d=>{
       const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(n)));
       const brl=sumBRL2(ls,base,ano,mesAte);
-      const metaBRL=ls.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
       const rhl=totVol>0?brl/totVol:0;
-      const metaRHL=totVol>0?metaBRL/totVol:0;
+      // Meta R$/HL Puxado do departamento: mesma lógica da versão Entregue.
+      const volAcumDeptP=(()=>{let s=0;getMs(mesAte).forEach(m=>s+=getVolPuxado(base,ano,m));return s;})();
+      const metaRHL=ls.reduce((s,n)=>{
+        const taxa=getTaxaRHL(n,base);
+        if(taxa>0) return s+taxa;
+        const mb=sumMeta(n,base,ano,mesAte);
+        return s+(volAcumDeptP>0?mb/volAcumDeptP:0);
+      },0);
       const ok=metaRHL>0&&rhl<=metaRHL;
       const pct=metaRHL>0?Math.min(rhl/metaRHL*100,200):0;
       const barClr=pct>100?'var(--red)':pct>85?'var(--amber)':'var(--green)';
@@ -3957,6 +3971,9 @@ function openMensalModal(mesSel, semanaSel) {
 
 // Clicou numa LINHA no pareto mensal → abre drill-down de linha para o mês/semana inteiro
 function openMensalLinhaModal(mesSel, semanaSel, linha) {
+  // Abre sempre o modal primeiro para evitar que erro silencioso impeça a exibição
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+  try {
   const {base}=S;
   const lblPeriodo=semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel));
 
@@ -4048,7 +4065,12 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
     if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='default';cv.onclick=null;makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
     _renderDetalheTabela(sorted,total,['Produto','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
   }
-  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+  } catch(e) {
+    console.error('openMensalLinhaModal erro:', e);
+    get('modal-title').textContent = linha;
+    get('modal-sub').textContent = 'Erro ao carregar detalhes — verifique o console';
+    get('modal-tbody').innerHTML = `<tr><td colspan="5" style="padding:20px;color:#ef4444;text-align:center">Erro: ${e.message}</td></tr>`;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
