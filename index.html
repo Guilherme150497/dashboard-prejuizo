@@ -1493,7 +1493,13 @@ function getRHL(nome, base, ano, mes) {
   const vol = getVolEntregue(base, ano, mes) || getVol(base, ano, mes);
   return vol > 0 ? brl / vol : 0;
 }
+function getTaxaRHL(nome, base) {
+  return S.taxasRHL?.[nome]?.[base] || 0;
+}
 function getMetaRHL(nome, base, ano, mes) {
+  // Usa taxa R$/HL direta da planilha quando disponível
+  const taxa = getTaxaRHL(nome, base);
+  if (taxa > 0) return taxa;
   const meta = getMeta(nome, base, ano, mes);
   const vol  = getVolEntregue(base, ano, mes) || getVol(base, ano, mes);
   return vol > 0 ? meta / vol : 0;
@@ -1509,6 +1515,9 @@ function getRHLPuxado(nome, base, ano, mes) {
   return vol > 0 ? brl / vol : 0;
 }
 function getMetaRHLPuxado(nome, base, ano, mes) {
+  // Usa taxa R$/HL direta da planilha quando disponível
+  const taxa = getTaxaRHL(nome, base);
+  if (taxa > 0) return taxa;
   const meta = getMeta(nome, base, ano, mes);
   const vol = getVolPuxado(base, ano, mes);
   return vol > 0 ? meta / vol : 0;
@@ -2041,7 +2050,10 @@ function renderRHLTable(containerId, linhas, base, ano, mesAte, getV, getVM, get
     const brlAcum=sumBRL(nome,base,ano,mesAte);
     const metaAcum=sumMeta(nome,base,ano,mesAte);
     const acumRHL=volAcum>0?brlAcum/volAcum:0;
-    const metaRHL=volAcum>0?metaAcum/volAcum:0;
+    // Meta R$/HL acumulada: usa taxa direta da planilha (constante) se disponível,
+    // senão recalcula como meta_R$_acum / vol_acum (média ponderada)
+    const taxaDireta=getTaxaRHL(nome,base);
+    const metaRHL=taxaDireta>0?taxaDireta:(volAcum>0?metaAcum/volAcum:0);
     const pctMeta=metaRHL>0?acumRHL/metaRHL:0;
     const acumCC=cellColor(acumRHL,metaRHL);
     const clrVsMeta=pctMeta>1?'var(--red)':pctMeta>0.9?'var(--amber)':'var(--green)';
@@ -4402,6 +4414,7 @@ function reloadFromCloud() {
 function applyData(d) {
   S.data      = fixKeys(d.data || {});
   S.metas     = fixKeys(d.metas || {});
+  S.taxasRHL  = d.taxasRHL || {};   // {nome: {base: taxa_rhl}} — taxa R$/HL direta da planilha
   S.vol       = fixKeys(d.vol || {});
   S.rawProd   = d.rawProd   || [];
   S.rawDiario = d.rawDiario || [];

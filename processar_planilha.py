@@ -309,32 +309,31 @@ for row in rows_bm:
     if not row or len(row) < 7: continue
     # Label pode estar em col F (idx 5) — volumes, ou col E (idx 4) — metas
     lbl_f = str(row[5] or '').strip().lower()
-    if 'volume tt pm' in lbl_f or 'cobeb pm' in lbl_f or (lbl_f.endswith(' pm') and 'volume' in lbl_f) or lbl_f == 'pm':
+    # Só captura volume se 'volume' estiver no label (evita sobrescrever com linhas de cabeçalho como 'COBEB PM')
+    if 'volume' in lbl_f and ('pm' in lbl_f):
         vol_pm = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
-    elif 'volume tt lp' in lbl_f or 'cobeb lp' in lbl_f or (lbl_f.endswith(' lp') and 'volume' in lbl_f) or lbl_f == 'lp':
+    elif 'volume' in lbl_f and ('lp' in lbl_f):
         vol_lp = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
-    elif 'volume tt ab' in lbl_f or 'rdc ab' in lbl_f or 'abaet' in lbl_f or (lbl_f.endswith(' ab') and 'volume' in lbl_f) or lbl_f == 'ab':
+    elif 'volume' in lbl_f and ('ab' in lbl_f or 'abaet' in lbl_f):
         vol_ab = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
 
 print(f"   Volumes PM Jan: {vol_pm[0]:.0f}, LP Jan: {vol_lp[0]:.0f}, AB Jan: {vol_ab[0]:.0f}")
 
 # ── Metas por linha de prejuízo ───────────────────────────────────────────
-# Estrutura real: nome da linha em col E (idx 4), taxas em cols F/G/H (idx 5/6/7)
+# Estrutura real: nome da linha em col E (idx 4), taxas em cols F/G/H (idx 5/6/7), TOTAL col I (idx 8)
 metas={}
+taxas_rhl={}   # {nome: {'COBEB PM': taxa, 'COBEB LP': taxa, 'RDC ABAETÉ': taxa, 'ALL': taxa_total}}
 # Linhas que têm meta como VALOR ABSOLUTO R$ por base (não taxa × volume)
-# EP e AG têm meta R$ direta — cols F/G/H são os valores mensais absolutos por base
 META_ABSOLUTA = {'Erro de Programação'}
 
 for row in rows_bm:
     if not row or len(row) < 6: continue
     nome = str(row[4] or '').strip()
-    # CORREÇÃO: não trocar nome de AG para EP — cada um tem sua meta própria
     if not nome or nome.lower() in SKIP: continue
     if nome not in ALL_LINHAS: continue
 
     if nome in META_ABSOLUTA:
         # Meta absoluta R$/mês: cols F=PM(idx5), G=LP(idx6), H=AB(idx7) são valores R$ diretos
-        # Se a planilha tiver valor único (total), distribui igualmente entre bases
         val_pm = _flt(row[5])
         val_lp = _flt(row[6]) if len(row) > 6 else 0.0
         val_ab = _flt(row[7]) if len(row) > 7 else 0.0
@@ -346,12 +345,21 @@ for row in rows_bm:
                     metas.setdefault(nome, {}).setdefault(bk, {}).setdefault(ano, {})[m+1] = round(val, 2)
                     metas.setdefault(nome, {}).setdefault('ALL', {}).setdefault(ano, {})
                     metas[nome]['ALL'][ano][m+1] = round(metas[nome]['ALL'][ano].get(m+1, 0) + val, 2)
+        # Taxa R$/HL para EP não se aplica (valor absoluto)
     else:
-        # Meta como taxa × volume (comportamento padrão)
-        taxa_pm = _flt(row[5])
-        taxa_lp = _flt(row[6]) if len(row) > 6 else 0.0
-        taxa_ab = _flt(row[7]) if len(row) > 7 else 0.0
+        # Meta como taxa × volume — cols F=PM, G=LP, H=AB, I=TOTAL
+        taxa_pm  = _flt(row[5])
+        taxa_lp  = _flt(row[6]) if len(row) > 6 else 0.0
+        taxa_ab  = _flt(row[7]) if len(row) > 7 else 0.0
+        taxa_tot = _flt(row[8]) if len(row) > 8 else 0.0
         if taxa_pm == 0.0 and taxa_lp == 0.0 and taxa_ab == 0.0: continue
+        # Salva taxas R$/HL diretamente (para exibição correta no dashboard)
+        taxas_rhl[nome] = {
+            'COBEB PM': round(taxa_pm, 10),
+            'COBEB LP': round(taxa_lp, 10),
+            'RDC ABAETÉ': round(taxa_ab, 10),
+            'ALL': round(taxa_tot if taxa_tot > 0 else taxa_pm + taxa_lp + taxa_ab, 10)
+        }
         for m in range(12):
             for bk, taxa, vol in [('COBEB PM', taxa_pm, vol_pm),
                                    ('COBEB LP', taxa_lp, vol_lp),
@@ -364,6 +372,7 @@ for row in rows_bm:
                     metas[nome]['ALL'][ano][m+1] = round(metas[nome]['ALL'][ano].get(m+1, 0) + v, 2)
 
 print(f"   {len(metas)} linhas de meta carregadas: {list(metas.keys())[:5]}")
+print(f"   Exemplo taxas_rhl Quebra Entrega: {taxas_rhl.get('Quebra Entrega (Retorno de Rota)',{})}")
 
 # Volume Real (Venda) e Volume Puxado — aba VOLUME_REAL
 # Localiza as linhas de cada base dinamicamente (ignora cabeçalhos com texto como 'JANEIRO')
@@ -425,7 +434,8 @@ def fk(d):
     if isinstance(d,dict): return {str(k):fk(v) for k,v in d.items()}
     return d
 
-payload = {'data':fk(data),'metas':fk(metas),'vol':fk(vol_real),'volPuxado':fk(vol_puxado),'volEntregue':volEntregue,
+payload = {'data':fk(data),'metas':fk(metas),'taxasRHL':taxas_rhl,
+           'vol':fk(vol_real),'volPuxado':fk(vol_puxado),'volEntregue':volEntregue,
            'rawProd':rawProd,'rawDiario':rawDiario,
            'wqiMensal':wqiMensal,'wqiDiario':wqiDiario,'wqiMeta':wqiMeta}
 
