@@ -146,7 +146,7 @@ print(f"   ✓ {n_rep} registros (somente até Ago/2026)")
 #   Col O (idx 14) = Status NF — somente "E" ou VAZIO (excluir "D")
 #   Col P (idx 15) = Código produto
 #   Col R (idx 17) = Descrição produto
-#   Col U (idx 20) = Valor (prejuízo)
+#   Col U (idx 20) = Valor total (prejuízo) — NÃO é col V/idx21 que é Pallet
 #   Col X (idx 23) = Justificativa — EXCLUIR se contiver "Falta de Produto"
 #   Col BL (idx 63)= Sistema Origem — "Promax" → Reposição Entrega; "Force" → Trocas Mercado (RN)
 print("📊 Lendo 03.18.05 (a partir de Set/2026)...")
@@ -175,7 +175,7 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     else:
         continue  # ignora linhas sem sistema reconhecido
 
-    vl = sf(row[21])   # Col V (idx 21) — Valor total (não Valor Unitário)
+    vl = sf(row[20])   # Col U (idx 20) — Valor total
     if vl <= 0: continue
 
     # Col AA (idx 26) — código produto, Col AB (idx 27) — descrição produto
@@ -267,7 +267,7 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     else:
         continue
 
-    vl = sf(row[21])   # Col V (idx 21) — Valor total
+    vl = sf(row[20])   # Col U (idx 20) — Valor total
     if vl <= 0: continue
 
     cod_prod  = int(row[26]) if isinstance(row[26],(int,float)) else None
@@ -287,6 +287,7 @@ print(f"   ✓ {n_dnova} registros diários 03.18.05")
 
 # Metas
 print("📊 Lendo BASE_METAS...")
+# Nomes que devem ser ignorados como linhas de meta (cabeçalhos, subtítulos, volumes)
 SKIP={'entrega','armazém','armazem','puxada','cobeb pm','cobeb lp','rdc abaeté','cobeb total',
       'meta','janeiro','volume pm','volume lp','volume ab','volume tt pm','volume tt lp','volume tt ab',
       'pm','lp','ab','rdc abaete',''}
@@ -296,76 +297,47 @@ def _flt(v):
     try: return float(v or 0)
     except: return 0.0
 
-# DEBUG: mostrar todos os labels encontrados na col E de BASE_METAS
-print("   Labels na col E de BASE_METAS:")
-for i, row in enumerate(rows_bm):
-    if len(row) > 4:
-        lbl_raw = str(row[4] or '').strip()
-        if lbl_raw:
-            print(f"     linha {i+1}: '{lbl_raw}' | F={row[5] if len(row)>5 else '?'} G={row[6] if len(row)>6 else '?'}")
-
-# Busca linhas de volume por label (coluna E = idx 4)
+# ── Volumes mensais (BASE_METAS linhas 3-5) ──────────────────────────────
+# Estrutura real: label em col F (idx 5), valores mensais em cols G-R (idx 6-17)
 vol_pm=[0.0]*12; vol_lp=[0.0]*12; vol_ab=[0.0]*12
 for row in rows_bm:
-    if len(row) <= 5: continue
-    lbl=str(row[4] or '').strip().lower()
-    # Tenta col E como label de volume
-    if any(x in lbl for x in ('volume tt pm','cobeb pm','volume pm','tt pm')) or lbl=='pm':
-        vol_pm=[_flt(row[5+m]) for m in range(min(12,len(row)-5))]
-        print(f"   ✅ vol_pm encontrado na linha com label '{lbl}': Jan={vol_pm[0]}")
-    elif any(x in lbl for x in ('volume tt lp','cobeb lp','volume lp','tt lp')) or lbl=='lp':
-        vol_lp=[_flt(row[5+m]) for m in range(min(12,len(row)-5))]
-        print(f"   ✅ vol_lp encontrado na linha com label '{lbl}': Jan={vol_lp[0]}")
-    elif any(x in lbl for x in ('volume tt ab','rdc ab','volume ab','abaet','tt ab')) or lbl=='ab':
-        vol_ab=[_flt(row[5+m]) for m in range(min(12,len(row)-5))]
-        print(f"   ✅ vol_ab encontrado na linha com label '{lbl}': Jan={vol_ab[0]}")
+    if not row or len(row) < 7: continue
+    # Label pode estar em col F (idx 5) — volumes, ou col E (idx 4) — metas
+    lbl_f = str(row[5] or '').strip().lower()
+    if 'volume tt pm' in lbl_f or 'cobeb pm' in lbl_f:
+        vol_pm = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
+    elif 'volume tt lp' in lbl_f or 'cobeb lp' in lbl_f:
+        vol_lp = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
+    elif 'volume tt ab' in lbl_f or 'rdc ab' in lbl_f or 'abaet' in lbl_f:
+        vol_ab = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
 
-# Se ainda zerado, tenta também pela coluna A ou B (alguns layouts têm label em outra coluna)
-if vol_pm[0] == 0.0 and vol_lp[0] == 0.0:
-    print("   ⚠️  Volumes não encontrados pela col E — tentando cols A/B...")
-    for row in rows_bm:
-        if not row or len(row) < 6: continue
-        for ci in [0, 1, 2, 3]:
-            lbl = str(row[ci] or '').strip().lower()
-            if any(x in lbl for x in ('volume tt pm','cobeb pm','volume pm','tt pm')) or lbl=='pm':
-                vol_pm=[_flt(row[5+m]) for m in range(min(12,len(row)-5))]
-                print(f"   ✅ vol_pm via col {ci}: '{lbl}' Jan={vol_pm[0]}")
-            elif any(x in lbl for x in ('volume tt lp','cobeb lp','volume lp','tt lp')) or lbl=='lp':
-                vol_lp=[_flt(row[5+m]) for m in range(min(12,len(row)-5))]
-                print(f"   ✅ vol_lp via col {ci}: '{lbl}' Jan={vol_lp[0]}")
-            elif any(x in lbl for x in ('volume tt ab','rdc ab','volume ab','abaet','tt ab')) or lbl=='ab':
-                vol_ab=[_flt(row[5+m]) for m in range(min(12,len(row)-5))]
-                print(f"   ✅ vol_ab via col {ci}: '{lbl}' Jan={vol_ab[0]}")
+print(f"   Volumes PM Jan: {vol_pm[0]:.0f}, LP Jan: {vol_lp[0]:.0f}, AB Jan: {vol_ab[0]:.0f}")
 
-print(f"   Volumes PM Jan: {vol_pm[0]}, LP Jan: {vol_lp[0]}, AB Jan: {vol_ab[0]}")
-
+# ── Metas por linha de prejuízo ───────────────────────────────────────────
+# Estrutura real: nome da linha em col E (idx 4), taxas em cols F/G/H (idx 5/6/7)
 metas={}
-print("   Processando linhas de meta:")
-linhas_meta_encontradas = 0
 for row in rows_bm:
-    if not row or len(row) < 5: continue
-    nome=str(row[4] or '').strip()
+    if not row or len(row) < 6: continue
+    nome = str(row[4] or '').strip()
     if nome == 'Diferença de AG': nome = 'Erro de Programação'
     if not nome or nome.lower() in SKIP: continue
-    if nome not in ALL_LINHAS:
-        print(f"     ⚠️  '{nome}' não está em ALL_LINHAS — pulando")
-        continue
-    taxa_pm=_flt(row[5]) if len(row)>5 else 0.0
-    taxa_lp=_flt(row[6]) if len(row)>6 else 0.0
-    taxa_ab=_flt(row[7]) if len(row)>7 else 0.0
-    print(f"     ✅ Meta '{nome}': taxaPM={taxa_pm}, taxaLP={taxa_lp}, taxaAB={taxa_ab}")
-    linhas_meta_encontradas += 1
+    if nome not in ALL_LINHAS: continue
+    taxa_pm = _flt(row[5])
+    taxa_lp = _flt(row[6]) if len(row) > 6 else 0.0
+    taxa_ab = _flt(row[7]) if len(row) > 7 else 0.0
+    if taxa_pm == 0.0 and taxa_lp == 0.0 and taxa_ab == 0.0: continue
     for m in range(12):
-        for bk,taxa,vol in [('COBEB PM',taxa_pm,vol_pm),
-                            ('COBEB LP',taxa_lp,vol_lp),
-                            ('RDC ABAETÉ',taxa_ab,vol_ab)]:
-            v=round(taxa*vol[m],2)
-            if v<=0: continue
-            for ano in [2025,2026]:
-                metas.setdefault(nome,{}).setdefault(bk,{}).setdefault(ano,{})[m+1]=v
-                metas.setdefault(nome,{}).setdefault('ALL',{}).setdefault(ano,{})
-                metas[nome]['ALL'][ano][m+1]=round(metas[nome]['ALL'][ano].get(m+1,0)+v,2)
-print(f"   Total linhas de meta processadas: {linhas_meta_encontradas}")
+        for bk, taxa, vol in [('COBEB PM', taxa_pm, vol_pm),
+                               ('COBEB LP', taxa_lp, vol_lp),
+                               ('RDC ABAETÉ', taxa_ab, vol_ab)]:
+            v = round(taxa * vol[m], 2)
+            if v <= 0: continue
+            for ano in [2025, 2026]:
+                metas.setdefault(nome, {}).setdefault(bk, {}).setdefault(ano, {})[m+1] = v
+                metas.setdefault(nome, {}).setdefault('ALL', {}).setdefault(ano, {})
+                metas[nome]['ALL'][ano][m+1] = round(metas[nome]['ALL'][ano].get(m+1, 0) + v, 2)
+
+print(f"   {len(metas)} linhas de meta carregadas: {list(metas.keys())[:5]}")
 
 # Volume Real (Venda) e Volume Puxado — aba VOLUME_REAL
 # Localiza as linhas de cada base dinamicamente (ignora cabeçalhos com texto como 'JANEIRO')
