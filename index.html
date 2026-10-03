@@ -4400,8 +4400,8 @@ function renderResumo() {
       const real   = getBRL(nome,base,mesAno,mes);
       const meta   = getMeta(nome,base,mesAno,mes);
       const antM   = mes>1 ? getBRL(nome,base,mesAno,mes-1) : getBRL(nome,base,mesAno-1,12);
-      const acum   = sumBRLFull(nome,base,mesAno,mes);  // Acum. Ano: jan→mes fixo
-      const metaA  = sumMetaFull(nome,base,mesAno,mes); // Meta Ano: jan→mes fixo, ignora filtro período
+      const acum   = sumBRLFull(nome,base,mesAno,mes);   // Acum. Ano: jan→mes selecionado
+      const metaA  = sumMetaFull(nome,base,mesAno,12);  // Meta Ano: sempre jan→dez completo
       const disp   = real - meta;
       const pct    = meta>0 ? (real/meta*100).toFixed(1)+'%' : '—';
       const pctA   = metaA>0 ? (acum/metaA*100).toFixed(1)+'%' : '—';
