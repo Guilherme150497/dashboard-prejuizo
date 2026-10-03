@@ -3494,6 +3494,11 @@ function renderDiario() {
   );
   const metaMes = linhasParaMeta.reduce((s,n)=>s+getMeta(n,base,ano_,mes_),0);
   const metaDia = metaMes / diasUteisMes;
+  // Meta R$/HL diária = meta R$ diária ÷ HL vendido médio por dia útil
+  const hlVendMesTot = bases2.reduce((s,b)=>
+    s+Object.entries(S.wqiDiario[b]||{}).filter(([d])=>d.startsWith(mesSel)).reduce((ss,[,v])=>ss+v.hl_vend,0),0);
+  const hlVendMedDia = diasUteisMes>0 ? hlVendMesTot/diasUteisMes : 0;
+  const metaRHLDia = hlVendMedDia>0 ? metaDia/hlVendMedDia : 0;
 
   // Bar chart - prejuízo diário com linha de meta diária
   const dayColors=vals.map(v=>{const p=v/Math.max(...vals,0.001);return p>0.7?'rgba(248,81,73,.85)':p>0.4?'rgba(240,163,10,.85)':'rgba(63,185,80,.75)';});
@@ -3588,7 +3593,8 @@ function renderDiario() {
       <th class="left" rowspan="2" style="vertical-align:middle">Data</th>
       <th rowspan="2" style="vertical-align:middle">Total R$</th>
       <th rowspan="2" style="vertical-align:middle">HL Vend.</th>
-      <th rowspan="2" style="color:var(--amber);vertical-align:middle">R$/HL Total</th>
+      <th rowspan="2" style="color:var(--amber);vertical-align:middle">R$/HL Real</th>
+      <th rowspan="2" style="color:var(--muted);vertical-align:middle;font-size:10px">Meta R$/HL</th>
       ${deptsVisiveis.map(d=>`<th colspan="2" style="text-align:center;border-left:1px solid var(--border);color:${DEPT_TABCOR[d]}">${d}</th>`).join('')}
       <th rowspan="2"></th>
     </tr>
@@ -3601,8 +3607,11 @@ function renderDiario() {
     const hlVend = bases2.reduce((s,b)=>s+(S.wqiDiario[b]?.[data]?.hl_vend||0),0);
     const totalDia = deptsVisiveis.reduce((s,d)=>s+(byDayDept[data][d]?.brl||0),0);
     const rhlTotal = hlVend>0 ? totalDia/hlVend : 0;
-    const rhlTotClr = rhlTotal>50?'var(--red)':rhlTotal>20?'var(--amber)':'var(--green)';
-    // vs meta diária
+    // Colorir R$/HL real vs meta R$/HL diária (verde = abaixo da meta, vermelho = acima)
+    const rhlTotClr = metaRHLDia>0
+      ? (rhlTotal > metaRHLDia ? 'var(--red)' : 'var(--green)')
+      : (rhlTotal>50?'var(--red)':rhlTotal>20?'var(--amber)':'var(--green)');
+    // vs meta R$ diária
     const vsMeta = metaDia>0 ? totalDia/metaDia : 0;
     const metaClr = vsMeta>1.2?'var(--red)':vsMeta>0.9?'var(--amber)':'var(--green)';
 
@@ -3614,12 +3623,16 @@ function renderDiario() {
       <td style="font-weight:600">${fmtBRL(totalDia)}</td>
       <td style="color:var(--muted);font-size:11px">${hlVend>0?fmtHL(hlVend)+' HL':'—'}</td>
       <td style="color:${rhlTotClr};font-weight:700;font-size:11px">${rhlTotal>0?fmtRHL(rhlTotal):'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${metaRHLDia>0?fmtRHL(metaRHLDia):'—'}</td>
       ${deptsVisiveis.map(d=>{
         const v=byDayDept[data][d]?.brl||0;
         const rhl=hlVend>0&&v>0?v/hlVend:0;
-        const clr=rhl>30?'var(--red)':rhl>12?'var(--amber)':'var(--green)';
+        // R$/HL por dept: usa mesma meta geral (por simplicidade — meta não está decomposta por dept)
+        const clrD = metaRHLDia>0
+          ? (rhl>metaRHLDia?'var(--red)':'var(--green)')
+          : (rhl>30?'var(--red)':rhl>12?'var(--amber)':'var(--green)');
         return `<td style="border-left:1px solid var(--border);font-size:12px">${v>0?fmtBRL(v):'—'}</td>
-                <td style="color:${clr};font-size:11px;font-weight:600">${rhl>0?fmtRHL(rhl):'—'}</td>`;
+                <td style="color:${clrD};font-size:11px;font-weight:600">${rhl>0?fmtRHL(rhl):'—'}</td>`;
       }).join('')}
       <td style="color:var(--muted);font-size:11px">🔍</td>
     </tr>`;
@@ -3954,24 +3967,73 @@ function renderMensal() {
   const diasMap={}; rowsFilt.forEach(r=>{ diasMap[r.data]=diasMap[r.data]||{brl:0,hl:0,semana:semanaDoMes(r.data)}; diasMap[r.data].brl+=r.brl; diasMap[r.data].hl+=r.hl; });
   const diasSorted=Object.entries(diasMap).map(([d,v])=>({data:d,...v})).sort((a,b)=>a.data.localeCompare(b.data));
   const totTabela=diasSorted.reduce((s,d)=>s+d.brl,0);
+
+  // Meta mensal (todas as linhas, conforme filtro de dept/linha)
+  const anoMens=parseInt(mesSel.split('-')[0]), mesMens=parseInt(mesSel.split('-')[1]);
+  const linhasMens=ALL_NOMES.filter(n=>(deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF));
+  const metaMensal=linhasMens.reduce((s,n)=>s+getMeta(n,base,anoMens,mesMens),0);
+
+  // Dias úteis totais do mês e por semana
+  const todosDiasMes=[...new Set(rowsMes.map(r=>r.data))].sort();
+  const totalDiasUteis=todosDiasMes.length||1;
+  // Dias úteis por semana dentro do filtro aplicado (rowsFilt já filtrado)
+  const diasUteisPorSem={};
+  todosDiasMes.forEach(d=>{
+    const s=semanaDoMes(d);
+    diasUteisPorSem[s]=(diasUteisPorSem[s]||0)+1;
+  });
+  // Meta por semana = proporcional aos dias úteis da semana
+  function metaSemana(sem){ return metaMensal * ((diasUteisPorSem[sem]||0)/totalDiasUteis); }
+
+  // Agrupa por semana para subtotais
+  const semMap2={};
+  diasSorted.forEach(d=>{ const s=d.semana; semMap2[s]=semMap2[s]||{brl:0,hl:0,dias:[]}; semMap2[s].brl+=d.brl; semMap2[s].hl+=d.hl; semMap2[s].dias.push(d); });
+
   let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="background:#0c0f14;position:sticky;top:0">
       <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Data</th>
       <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Semana</th>
-      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$ Real</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">Meta R$</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">vs Meta</th>
       <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Total</th>
       <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HLs</th>
     </tr></thead><tbody>`;
-  diasSorted.forEach(d=>{
-    const dd=d.data.split('-').reverse().join('/');
-    const pct=(d.brl/totTabela*100).toFixed(1);
-    html+=`<tr style="border-bottom:1px solid #1a2030;cursor:pointer" onclick="openMensalDiaModal('${d.data}','${dd}')">
-      <td style="padding:7px 12px;color:#e2e8f4">${dd}</td>
-      <td style="padding:7px 12px;color:#5a6a88;font-size:11px">${lblSemana(d.semana)}</td>
-      <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-weight:600">${fmtBRL(d.brl)}</td>
-      <td style="padding:7px 12px;text-align:right;color:#5a6a88">${pct}%</td>
-      <td style="padding:7px 12px;text-align:right;color:#5a6a88">${fmtHL(d.hl)}</td>
+
+  // Renderiza agrupado por semana com subtotal
+  const semsOrdem=[...new Set(diasSorted.map(d=>d.semana))].sort((a,b)=>a-b);
+  semsOrdem.forEach(sem=>{
+    const grp=semMap2[sem];
+    const metaSem=metaSemana(sem);
+    const vsSem=metaSem>0?grp.brl/metaSem:0;
+    const vsClrSem=vsSem>1?'var(--red)':'var(--green)';
+    // Linha subtotal da semana
+    html+=`<tr style="background:#0f1520;border-bottom:2px solid #1c2333">
+      <td style="padding:6px 12px;color:#8a9ab8;font-size:11px;font-weight:600" colspan="2">${lblSemana(sem)} — ${grp.dias.length} dias úteis</td>
+      <td style="padding:6px 12px;text-align:right;color:#e2e8f4;font-weight:700">${fmtBRL(grp.brl)}</td>
+      <td style="padding:6px 12px;text-align:right;color:var(--muted);font-size:11px">${metaSem>0?fmtBRL(metaSem):'—'}</td>
+      <td style="padding:6px 12px;text-align:right;color:${vsClrSem};font-weight:700;font-size:11px">${metaSem>0?(vsSem*100).toFixed(0)+'%':'—'}</td>
+      <td style="padding:6px 12px;text-align:right;color:#5a6a88">${(grp.brl/totTabela*100).toFixed(1)}%</td>
+      <td style="padding:6px 12px;text-align:right;color:#5a6a88">${fmtHL(grp.hl)}</td>
     </tr>`;
+    // Linhas diárias dentro da semana
+    grp.dias.forEach(d=>{
+      const dd=d.data.split('-').reverse().join('/');
+      const pct=(d.brl/totTabela*100).toFixed(1);
+      // Meta dia = meta da semana ÷ dias úteis da semana
+      const metaDiaSem = metaSem / (diasUteisPorSem[sem]||1);
+      const vsDia = metaDiaSem>0 ? d.brl/metaDiaSem : 0;
+      const vsClrDia = vsDia>1?'var(--red)':'var(--green)';
+      html+=`<tr style="border-bottom:1px solid #1a2030;cursor:pointer" onclick="openMensalDiaModal('${d.data}','${dd}')">
+        <td style="padding:7px 12px 7px 20px;color:#e2e8f4">${dd}</td>
+        <td style="padding:7px 12px;color:#5a6a88;font-size:11px">${lblSemana(d.semana)}</td>
+        <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-weight:600">${fmtBRL(d.brl)}</td>
+        <td style="padding:7px 12px;text-align:right;color:var(--muted);font-size:11px">${metaDiaSem>0?fmtBRL(metaDiaSem):'—'}</td>
+        <td style="padding:7px 12px;text-align:right;color:${vsClrDia};font-weight:600;font-size:11px">${metaDiaSem>0?(vsDia*100).toFixed(0)+'%':'—'}</td>
+        <td style="padding:7px 12px;text-align:right;color:#5a6a88">${pct}%</td>
+        <td style="padding:7px 12px;text-align:right;color:#5a6a88">${fmtHL(d.hl)}</td>
+      </tr>`;
+    });
   });
   html+=`</tbody></table>`;
   get('t-mensal').innerHTML=html;
