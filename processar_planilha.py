@@ -309,11 +309,11 @@ for row in rows_bm:
     if not row or len(row) < 7: continue
     # Label pode estar em col F (idx 5) — volumes, ou col E (idx 4) — metas
     lbl_f = str(row[5] or '').strip().lower()
-    if 'volume tt pm' in lbl_f or 'cobeb pm' in lbl_f:
+    if 'volume tt pm' in lbl_f or 'cobeb pm' in lbl_f or (lbl_f.endswith(' pm') and 'volume' in lbl_f) or lbl_f == 'pm':
         vol_pm = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
-    elif 'volume tt lp' in lbl_f or 'cobeb lp' in lbl_f:
+    elif 'volume tt lp' in lbl_f or 'cobeb lp' in lbl_f or (lbl_f.endswith(' lp') and 'volume' in lbl_f) or lbl_f == 'lp':
         vol_lp = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
-    elif 'volume tt ab' in lbl_f or 'rdc ab' in lbl_f or 'abaet' in lbl_f:
+    elif 'volume tt ab' in lbl_f or 'rdc ab' in lbl_f or 'abaet' in lbl_f or (lbl_f.endswith(' ab') and 'volume' in lbl_f) or lbl_f == 'ab':
         vol_ab = [_flt(row[6+m]) for m in range(min(12, len(row)-6))]
 
 print(f"   Volumes PM Jan: {vol_pm[0]:.0f}, LP Jan: {vol_lp[0]:.0f}, AB Jan: {vol_ab[0]:.0f}")
