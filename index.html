@@ -1132,9 +1132,9 @@ function parse0317mensal(wb) {
       if (op===1||op===2) S._wqiMeta[base].hl_vend += vol;
     }
 
-    // Linhas do pacote: cod reconhecido → usa nome da linha (qualquer op)
-    // cod NÃO reconhecido + op=107 → Diferença de AG
-    const nome = CODES_MAP[cod] || (op===107 ? 'Diferença de AG' : null);
+    // op=107 → sempre Diferença de AG (prioridade sobre CODES_MAP para evitar conflito de código)
+    // op=108 + cod reconhecido → linha do pacote
+    const nome = op===107 ? 'Diferença de AG' : (CODES_MAP[cod] || null);
     if (!nome) continue;
 
     addData(nome, base, ano, mes, vl, vol);
@@ -1195,7 +1195,7 @@ function parse0317diaria(wb) {
     if (WQI_CODES_SET.has(cod)) S.wqiDiario[base][dataStr].hl_perd += vol;
     if (op===1||op===2) S.wqiDiario[base][dataStr].hl_vend += vol;
 
-    const nome = CODES_MAP[cod] || (op===107 ? 'Diferença de AG' : null);
+    const nome = op===107 ? 'Diferença de AG' : (CODES_MAP[cod] || null);
     if (!nome) continue;
     const info = S.lookup[prodCod] || {};
     S.rawDiario.push({base, data:dataStr, linha:nome,

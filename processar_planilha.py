@@ -111,7 +111,8 @@ for row in wb['03.05.17'].iter_rows(min_row=2,values_only=True):
         if cod in WQI_CODES: wqiMetaAcc[base]['hl_perd']+=hl
         if op in [1,2]: wqiMetaAcc[base]['hl_vend']+=hl
 
-    nome=COD_MAP.get(cod) or ('Diferença de AG' if op==107 else None)
+    # op=107 → sempre Diferença de AG (prioridade sobre COD_MAP para evitar conflito de código)
+    nome=('Diferença de AG' if op==107 else COD_MAP.get(cod))
     if not nome: continue
     add(data,nome,base,dt.year,dt.month,vl,hl)
     if prod and vl:
@@ -213,7 +214,7 @@ for row in wb['03.05.17 diária'].iter_rows(min_row=2,values_only=True):
     wqiDiario.setdefault(base,{}).setdefault(ds,{'hl_perd':0.0,'hl_vend':0.0})
     if cod in WQI_CODES: wqiDiario[base][ds]['hl_perd']+=vol
     if op in [1,2]: wqiDiario[base][ds]['hl_vend']+=vol
-    nome=COD_MAP.get(cod) or ('Diferença de AG' if op==107 else None)
+    nome=('Diferença de AG' if op==107 else COD_MAP.get(cod))
     if not nome: continue
     info=lookup.get(cod_prod,{}) if cod_prod else {}
     rawDiario.append({'base':base,'data':ds,'linha':nome,'brl':round(vl,2),'hl':round(vol,4),
