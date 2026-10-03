@@ -184,6 +184,8 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="sb-label">Produto</div>
     <div class="sb-item" onclick="nav('produto',this)"><span class="sb-icon">📦</span>Por Produto</div>
     <div class="sb-item" onclick="nav('marcaembal',this)"><span class="sb-icon">🏷️</span>Marca / Embalagem</div>
+    <div class="sb-item" onclick="nav('motorista',this)"><span class="sb-icon">🚚</span>Por Motorista</div>
+    <div class="sb-item" onclick="nav('setorvenda',this)"><span class="sb-icon">🗂️</span>Por Setor Venda</div>
   </div>
 
   <div class="sb-group">
@@ -551,6 +553,62 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="panel">
       <div class="panel-head"><div><div class="pt" id="me-table-title">Tabela Completa</div><div class="ps">Com % acumulado e zona Pareto</div></div></div>
       <div class="panel-body no-pad"><div class="tw" id="t-marcaembal"></div></div>
+    </div>
+  </div>
+
+  <!-- ══ POR MOTORISTA ══ -->
+  <div class="section" id="s-motorista">
+    <div class="filter-row">
+      <span class="filter-label">Linha: Reposição Entrega</span>
+      <select id="sel-mot-base" onchange="renderMotorista()">
+        <option value="ALL">Todas as bases</option>
+        <option value="COBEB LP">COBEB LP</option>
+        <option value="COBEB PM">COBEB PM</option>
+        <option value="RDC ABAETÉ">RDC ABAETÉ</option>
+      </select>
+    </div>
+    <div class="kpi-row" id="kpi-motorista"></div>
+    <div class="g2">
+      <div class="panel">
+        <div class="panel-head"><div><div class="pt">Pareto — por Motorista</div><div class="ps">Reposição Entrega · 80% do prejuízo nas barras vermelhas</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:380px"><canvas id="c-mot-pareto"></canvas></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="pt">Evolução Mensal — Top 5 Motoristas</div><div class="ps">Mês a mês no ano selecionado</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:380px"><canvas id="c-mot-linha"></canvas></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div><div class="pt">Ranking de Motoristas</div><div class="ps">Reposição Entrega — com % acumulado e zona Pareto</div></div></div>
+      <div class="panel-body no-pad"><div class="tw" id="t-motorista"></div></div>
+    </div>
+  </div>
+
+  <!-- ══ POR SETOR VENDA ══ -->
+  <div class="section" id="s-setorvenda">
+    <div class="filter-row">
+      <span class="filter-label">Linha: Trocas Mercado (RN)</span>
+      <select id="sel-sv-base" onchange="renderSetorVenda()">
+        <option value="ALL">Todas as bases</option>
+        <option value="COBEB LP">COBEB LP</option>
+        <option value="COBEB PM">COBEB PM</option>
+        <option value="RDC ABAETÉ">RDC ABAETÉ</option>
+      </select>
+    </div>
+    <div class="kpi-row" id="kpi-setorvenda"></div>
+    <div class="g2">
+      <div class="panel">
+        <div class="panel-head"><div><div class="pt">Pareto — por Setor de Venda</div><div class="ps">Trocas Mercado (RN) · 80% do prejuízo nas barras vermelhas</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:380px"><canvas id="c-sv-pareto"></canvas></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="pt">Evolução Mensal — Top 5 Setores</div><div class="ps">Mês a mês no ano selecionado</div></div></div>
+        <div class="panel-body"><div class="chart-wrap" style="height:380px"><canvas id="c-sv-linha"></canvas></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div><div class="pt">Ranking por Setor de Venda</div><div class="ps">Trocas Mercado (RN) — com % acumulado e zona Pareto</div></div></div>
+      <div class="panel-body no-pad"><div class="tw" id="t-setorvenda"></div></div>
     </div>
   </div>
 
@@ -1449,6 +1507,8 @@ function render() {
   renderRank();
   renderTend();
   renderMarcaEmbal();
+  renderMotorista();
+  renderSetorVenda();
   renderDiario();
   renderWQI();
   renderResumo();
@@ -2730,6 +2790,166 @@ function renderMarcaEmbal() {
   });
   html+='</tbody></table>';
   document.getElementById('t-marcaembal').innerHTML=html;
+}
+
+// ── POR MOTORISTA ─────────────────────────────────────────────────────────────
+function renderMotorista() {
+  const {ano, mesAte} = S;
+  const mesesSel = S.mesesSel||Array.from({length:mesAte},(_,i)=>i+1);
+  const baseF = document.getElementById('sel-mot-base').value;
+  const baseFilter = baseF!=='ALL' ? baseF : (S.base!=='ALL' ? S.base : 'ALL');
+
+  const filtered = S.rawProd.filter(r=>
+    r.linha==='Reposição Entrega' &&
+    r.ano===ano && r.mes<=mesAte && mesesSel.includes(r.mes) &&
+    (baseFilter==='ALL'||r.base===baseFilter)
+  );
+
+  const map = {};
+  filtered.forEach(r=>{
+    const k = r.motorista || 'Não Identificado';
+    if(!map[k]) map[k]={brl:0};
+    map[k].brl += r.brl;
+  });
+  const sorted = Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl})).sort((a,b)=>b.brl-a.brl);
+  const total = sorted.reduce((s,p)=>s+p.brl,0);
+
+  // KPIs
+  const top1=sorted[0];
+  let cnt80=0; let s80=0;
+  for(const p of sorted){s80+=p.brl;cnt80++;if(total>0&&s80/total>=0.8)break;}
+  document.getElementById('kpi-motorista').innerHTML=`
+    <div class="kpi amber"><div class="kpi-label">Total R$ Prejuízo</div><div class="kpi-value">${fmtBRL(total)}</div><div class="kpi-sub">${sorted.length} motoristas</div></div>
+    <div class="kpi red"><div class="kpi-label">#1 Motorista</div><div class="kpi-value" style="font-size:14px">${top1?.nome.substring(0,22)||'—'}</div><div class="kpi-sub">${top1?fmtBRL(top1.brl):''}</div></div>
+    <div class="kpi blue"><div class="kpi-label">Média por Motorista</div><div class="kpi-value">${sorted.length?fmtBRL(total/sorted.length):'—'}</div></div>
+    <div class="kpi green"><div class="kpi-label">Motoristas no 80%</div><div class="kpi-value">${cnt80}</div><div class="kpi-sub">concentram 80% do prejuízo</div></div>
+  `;
+
+  // Pareto
+  makePareto('c-mot-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Motorista', null);
+
+  // Monthly line chart top 5
+  const top5=sorted.slice(0,5).map(p=>p.nome);
+  const c5=['#ef4444','#2d7ef7','#22c55e','#a78bfa','#d97706'];
+  const mesMeses = mesesSel.filter(m=>m<=mesAte);
+  const lineDS=top5.map((nome,i)=>({
+    label:nome.length>22?nome.substring(0,20)+'…':nome,
+    data:mesMeses.map(m=>filtered.filter(r=>(r.motorista||'Não Identificado')===nome&&r.mes===m).reduce((s,r)=>s+r.brl,0)||null),
+    borderColor:c5[i],backgroundColor:c5[i]+'22',tension:.4,fill:false,pointRadius:3,pointBackgroundColor:c5[i],spanGaps:true
+  }));
+  dchart('c-mot-linha'); const cl=get('c-mot-linha').getContext('2d');
+  CH['c-mot-linha']=new Chart(cl,{type:'line',data:{labels:mesMeses.map(m=>MESES[m-1]),datasets:lineDS},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:10},boxWidth:10,padding:8}},
+        tooltip:{mode:'index',intersect:false,callbacks:{label:c=>c.raw?`${c.dataset.label}: ${fmtBRL(c.raw)}`:null,filter:i=>i.raw!==null},backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}},
+      scales:{x:{ticks:{color:'#5a6a88',font:{size:10}},grid:{color:'rgba(48,54,61,.3)'}},y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.3)'}}}
+    }
+  });
+
+  // Table
+  let running=0;
+  let html=`<table><thead><tr>
+    <th style="text-align:center;width:28px">#</th>
+    <th class="left">Motorista</th>
+    <th>R$ Prejuízo</th><th>% Total</th><th>% Acumulado</th><th>Zona</th>
+  </tr></thead><tbody>`;
+  sorted.forEach((p,i)=>{
+    running+=p.brl;
+    const pct=total>0?(p.brl/total*100).toFixed(1):'0.0';
+    const cum=total>0?(running/total*100).toFixed(1):'0.0';
+    const zona=parseFloat(cum)<=80?'🔴':parseFloat(cum)<=95?'🟡':'🟢';
+    const cumCls=parseFloat(cum)<=80?'red':parseFloat(cum)<=95?'':'green';
+    html+=`<tr>
+      <td style="text-align:center;color:var(--muted);font-size:11px">${i+1}</td>
+      <td class="left">${p.nome}</td>
+      <td>${fmtBRL(p.brl)}</td>
+      <td style="color:var(--muted)">${pct}%</td>
+      <td class="${cumCls}" style="font-weight:600">${cum}%</td>
+      <td style="font-size:13px">${zona}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('t-motorista').innerHTML=html;
+}
+
+// ── POR SETOR VENDA ───────────────────────────────────────────────────────────
+function renderSetorVenda() {
+  const {ano, mesAte} = S;
+  const mesesSel = S.mesesSel||Array.from({length:mesAte},(_,i)=>i+1);
+  const baseF = document.getElementById('sel-sv-base').value;
+  const baseFilter = baseF!=='ALL' ? baseF : (S.base!=='ALL' ? S.base : 'ALL');
+
+  const filtered = S.rawProd.filter(r=>
+    r.linha==='Trocas Mercado (RN)' &&
+    r.ano===ano && r.mes<=mesAte && mesesSel.includes(r.mes) &&
+    (baseFilter==='ALL'||r.base===baseFilter)
+  );
+
+  const map = {};
+  filtered.forEach(r=>{
+    const k = r.setor ? String(r.setor) : 'Não Identificado';
+    if(!map[k]) map[k]={brl:0};
+    map[k].brl += r.brl;
+  });
+  const sorted = Object.entries(map).map(([k,v])=>({nome:k,brl:v.brl})).sort((a,b)=>b.brl-a.brl);
+  const total = sorted.reduce((s,p)=>s+p.brl,0);
+
+  // KPIs
+  const top1=sorted[0];
+  let cnt80=0; let s80=0;
+  for(const p of sorted){s80+=p.brl;cnt80++;if(total>0&&s80/total>=0.8)break;}
+  document.getElementById('kpi-setorvenda').innerHTML=`
+    <div class="kpi amber"><div class="kpi-label">Total R$ Prejuízo</div><div class="kpi-value">${fmtBRL(total)}</div><div class="kpi-sub">${sorted.length} setores</div></div>
+    <div class="kpi red"><div class="kpi-label">#1 Setor</div><div class="kpi-value">${top1?.nome||'—'}</div><div class="kpi-sub">${top1?fmtBRL(top1.brl):''}</div></div>
+    <div class="kpi blue"><div class="kpi-label">Média por Setor</div><div class="kpi-value">${sorted.length?fmtBRL(total/sorted.length):'—'}</div></div>
+    <div class="kpi green"><div class="kpi-label">Setores no 80%</div><div class="kpi-value">${cnt80}</div><div class="kpi-sub">concentram 80% do prejuízo</div></div>
+  `;
+
+  // Pareto
+  makePareto('c-sv-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Setor Venda', null);
+
+  // Monthly line chart top 5
+  const top5=sorted.slice(0,5).map(p=>p.nome);
+  const c5=['#ef4444','#2d7ef7','#22c55e','#a78bfa','#d97706'];
+  const mesMeses = mesesSel.filter(m=>m<=mesAte);
+  const lineDS=top5.map((nome,i)=>({
+    label:`Setor ${nome}`,
+    data:mesMeses.map(m=>filtered.filter(r=>String(r.setor||'Não Identificado')===nome&&r.mes===m).reduce((s,r)=>s+r.brl,0)||null),
+    borderColor:c5[i],backgroundColor:c5[i]+'22',tension:.4,fill:false,pointRadius:3,pointBackgroundColor:c5[i],spanGaps:true
+  }));
+  dchart('c-sv-linha'); const cl=get('c-sv-linha').getContext('2d');
+  CH['c-sv-linha']=new Chart(cl,{type:'line',data:{labels:mesMeses.map(m=>MESES[m-1]),datasets:lineDS},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:10},boxWidth:10,padding:8}},
+        tooltip:{mode:'index',intersect:false,callbacks:{label:c=>c.raw?`${c.dataset.label}: ${fmtBRL(c.raw)}`:null,filter:i=>i.raw!==null},backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}},
+      scales:{x:{ticks:{color:'#5a6a88',font:{size:10}},grid:{color:'rgba(48,54,61,.3)'}},y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.3)'}}}
+    }
+  });
+
+  // Table
+  let running=0;
+  let html=`<table><thead><tr>
+    <th style="text-align:center;width:28px">#</th>
+    <th class="left">Setor Venda</th>
+    <th>R$ Prejuízo</th><th>% Total</th><th>% Acumulado</th><th>Zona</th>
+  </tr></thead><tbody>`;
+  sorted.forEach((p,i)=>{
+    running+=p.brl;
+    const pct=total>0?(p.brl/total*100).toFixed(1):'0.0';
+    const cum=total>0?(running/total*100).toFixed(1):'0.0';
+    const zona=parseFloat(cum)<=80?'🔴':parseFloat(cum)<=95?'🟡':'🟢';
+    const cumCls=parseFloat(cum)<=80?'red':parseFloat(cum)<=95?'':'green';
+    html+=`<tr>
+      <td style="text-align:center;color:var(--muted);font-size:11px">${i+1}</td>
+      <td class="left">${p.nome}</td>
+      <td>${fmtBRL(p.brl)}</td>
+      <td style="color:var(--muted)">${pct}%</td>
+      <td class="${cumCls}" style="font-weight:600">${cum}%</td>
+      <td style="font-size:13px">${zona}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('t-setorvenda').innerHTML=html;
 }
 
 
