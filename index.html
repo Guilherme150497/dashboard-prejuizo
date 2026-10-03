@@ -3488,7 +3488,8 @@ function renderDiario() {
 
   const ano_ = parseInt(mesSel.split('-')[0]), mes_ = parseInt(mesSel.split('-')[1]);
   // Meta mensal filtrada pelas linhas/dept selecionados
-  const linhasParaMeta = ALL_NOMES.filter(n=>
+  // NOMES_TOTAL exclui Diferença de AG (não entra na meta)
+  const linhasParaMeta = NOMES_TOTAL.filter(n=>
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n)) &&
     (deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF)
   );
@@ -3970,7 +3971,8 @@ function renderMensal() {
 
   // Meta mensal (todas as linhas, conforme filtro de dept/linha)
   const anoMens=parseInt(mesSel.split('-')[0]), mesMens=parseInt(mesSel.split('-')[1]);
-  const linhasMens=ALL_NOMES.filter(n=>(deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF));
+  // NOMES_TOTAL exclui Diferença de AG (não entra na meta)
+  const linhasMens=NOMES_TOTAL.filter(n=>(deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF));
   const metaMensal=linhasMens.reduce((s,n)=>s+getMeta(n,base,anoMens,mesMens),0);
 
   // Dias úteis totais do mês e por semana
