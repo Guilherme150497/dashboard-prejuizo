@@ -3065,8 +3065,43 @@ function renderMotorista() {
     <div class="kpi green"><div class="kpi-label">Motoristas no 80%</div><div class="kpi-value">${cnt80}</div><div class="kpi-sub">concentram 80% do prejuízo</div></div>
   `;
 
-  // Pareto
-  makePareto('c-mot-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Motorista', null);
+  // Pareto — clicar no motorista abre pareto de produtos daquele motorista
+  makePareto('c-mot-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Motorista', (motNome)=>{
+    const prods={};
+    filtered.filter(r=>(r.motorista||'Não Identificado')===motNome).forEach(r=>{
+      if(!r.prod) return;
+      prods[r.prod]=prods[r.prod]||{brl:0,hl:0};
+      prods[r.prod].brl+=r.brl; prods[r.prod].hl+=r.hl;
+    });
+    const sortedP=Object.entries(prods).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const tot=sortedP.reduce((s,p)=>s+p.brl,0);
+    const bc=get('modal-breadcrumb'); bc.innerHTML='';
+    bc.appendChild(_bcItem('Motoristas', ()=>closeModal()));
+    bc.appendChild(_bcSep()); bc.appendChild(_bcItem(motNome, null));
+    get('modal-title').textContent=`Produtos — ${motNome}`;
+    get('modal-sub').textContent=`${sortedP.length} produto(s) · ${fmtBRL(tot)} · Reposição Entrega`;
+    get('modal-pareto-label').textContent='Pareto de Produtos';
+    if(sortedP.length>0) setTimeout(()=>makePareto('c-modal-pareto',sortedP.slice(0,25),'nome','brl',fmtBRL,'R$'),50);
+    let run=0;
+    get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+      <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+      <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Produto</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HL</th>
+    </tr>`;
+    get('modal-tbody').innerHTML=sortedP.length>0
+      ? sortedP.map((p,i)=>{run+=p.brl;const cum=(run/tot*100).toFixed(1);const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+          return`<tr style="border-bottom:1px solid #1a2030">
+            <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+            <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+            <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px">${fmtBRL(p.brl)}</td>
+            <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+            <td style="padding:7px 12px;text-align:right;color:#2d7ef7;font-size:12px">${p.hl>0?fmtHL(p.hl):'—'}</td>
+          </tr>`;}).join('')
+      : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Nenhum produto identificado.</td></tr>`;
+    get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+  });
 
   // Monthly line chart top 5
   const top5=sorted.slice(0,5).map(p=>p.nome);
@@ -3145,8 +3180,43 @@ function renderSetorVenda() {
     <div class="kpi green"><div class="kpi-label">Setores no 80%</div><div class="kpi-value">${cnt80}</div><div class="kpi-sub">concentram 80% do prejuízo</div></div>
   `;
 
-  // Pareto
-  makePareto('c-sv-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Setor Venda', null);
+  // Pareto — clicar no setor abre pareto de produtos daquele setor
+  makePareto('c-sv-pareto', sorted.slice(0,20), 'nome', 'brl', fmtBRL, 'Setor Venda', (setorNome)=>{
+    const prods={};
+    filtered.filter(r=>String(r.setor||'Não Identificado')===setorNome).forEach(r=>{
+      if(!r.prod) return;
+      prods[r.prod]=prods[r.prod]||{brl:0,hl:0};
+      prods[r.prod].brl+=r.brl; prods[r.prod].hl+=r.hl;
+    });
+    const sortedP=Object.entries(prods).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+    const tot=sortedP.reduce((s,p)=>s+p.brl,0);
+    const bc=get('modal-breadcrumb'); bc.innerHTML='';
+    bc.appendChild(_bcItem('Setores Venda', ()=>closeModal()));
+    bc.appendChild(_bcSep()); bc.appendChild(_bcItem(`Setor ${setorNome}`, null));
+    get('modal-title').textContent=`Produtos — Setor ${setorNome}`;
+    get('modal-sub').textContent=`${sortedP.length} produto(s) · ${fmtBRL(tot)} · Trocas Mercado (RN)`;
+    get('modal-pareto-label').textContent='Pareto de Produtos';
+    if(sortedP.length>0) setTimeout(()=>makePareto('c-modal-pareto',sortedP.slice(0,25),'nome','brl',fmtBRL,'R$'),50);
+    let run=0;
+    get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+      <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+      <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Produto</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
+      <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HL</th>
+    </tr>`;
+    get('modal-tbody').innerHTML=sortedP.length>0
+      ? sortedP.map((p,i)=>{run+=p.brl;const cum=(run/tot*100).toFixed(1);const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+          return`<tr style="border-bottom:1px solid #1a2030">
+            <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+            <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+            <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px">${fmtBRL(p.brl)}</td>
+            <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+            <td style="padding:7px 12px;text-align:right;color:#2d7ef7;font-size:12px">${p.hl>0?fmtHL(p.hl):'—'}</td>
+          </tr>`;}).join('')
+      : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Nenhum produto identificado.</td></tr>`;
+    get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+  });
 
   // Monthly line chart top 5
   const top5=sorted.slice(0,5).map(p=>p.nome);
@@ -3196,71 +3266,123 @@ function renderSetorVenda() {
 // ═══════════════════════════════════════════════════════
 // MODAL DRILL-DOWN PRODUTOS
 // ═══════════════════════════════════════════════════════
+// Nível 1: Marca/Embalagem → pareto de linhas de prejuízo
 function openModal(dimKey, dimNome, dimLabel) {
   const {base, ano, mesAte} = S;
-  const linhaF_arr=msGetValues('ms-me-linha'); const linhaF=linhaF_arr.includes('ALL')?'ALL':linhaF_arr[0];
+  const mesesSel = S.mesesSel||Array.from({length:mesAte},(_,i)=>i+1);
+  const linhaF_arr=msGetValues('ms-me-linha');
+  const deptF=document.getElementById('sel-me-dept').value;
 
-  // Filter rawProd directly — it now has marca and embal fields
   const filtered = S.rawProd.filter(r=>
     (base==='ALL'||r.base===base) &&
-    r.ano===ano && r.mes<=mesAte &&
+    r.ano===ano && r.mes<=mesAte && mesesSel.includes(r.mes) &&
     r[dimKey] === dimNome &&
-    (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha))
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
+    (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
   );
 
-  // Aggregate by product name
-  const prodMap = {};
-  filtered.forEach(r => {
-    if(!prodMap[r.prod]) prodMap[r.prod] = {brl:0, hl:0, linhas:new Set()};
-    prodMap[r.prod].brl += r.brl;
-    prodMap[r.prod].hl  += r.hl;
-    prodMap[r.prod].linhas.add(r.linha);
+  // Agrupa por linha
+  const linhaMap = {};
+  filtered.forEach(r=>{
+    const k = r.linha||'Não Identificado';
+    linhaMap[k] = linhaMap[k]||{brl:0,hl:0};
+    linhaMap[k].brl+=r.brl; linhaMap[k].hl+=r.hl;
   });
-  const sorted = Object.entries(prodMap)
-    .map(([k,v])=>({nome:k, brl:v.brl, hl:v.hl, linhas:[...v.linhas].join(', ')}))
-    .sort((a,b)=>b.brl-a.brl);
-  const total = sorted.reduce((s,p)=>s+p.brl,0);
+  const sortedLinhas = Object.entries(linhaMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+  const total = sortedLinhas.reduce((s,p)=>s+p.brl,0);
 
-  // Set titles
-  get('modal-title').textContent = `${dimLabel}: ${dimNome}`;
-  get('modal-sub').textContent = `${sorted.length} produto(s) · ${fmtBRL(total)} total · ${MESES[mesAte-1]}/${ano}`;
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(dimNome,null));
 
-  // Pareto
-  if(sorted.length > 0) {
-    setTimeout(()=>makePareto('c-modal-pareto', sorted.slice(0,25), 'nome', 'brl', fmtBRL, 'R$ Prejuízo'), 50);
-  }
+  get('modal-title').textContent=`${dimLabel}: ${dimNome}`;
+  get('modal-sub').textContent=`${sortedLinhas.length} linha(s) · ${fmtBRL(total)} total`;
+  get('modal-pareto-label').textContent='Pareto de Linhas — clique para ver produtos';
 
-  // Table
-  let running = 0;
-  get('modal-thead').innerHTML = `<tr style="background:#0c0f14;position:sticky;top:0">
-    <th style="padding:8px 12px;text-align:center;color:#5a6a88;font-size:11px;font-weight:600;width:28px">#</th>
-    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px;font-weight:600">Produto</th>
-    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px;font-weight:600">R$</th>
-    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px;font-weight:600">% Acum.</th>
-    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px;font-weight:600">HL</th>
-    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px;font-weight:600">Linha</th>
+  // Pareto de linhas com click → nível 2
+  if(sortedLinhas.length>0) setTimeout(()=>makePareto('c-modal-pareto',sortedLinhas.slice(0,20),'nome','brl',fmtBRL,'R$',
+    (linhaNome)=>openModalLinhaProds(dimKey,dimNome,dimLabel,linhaNome,filtered)
+  ),50);
+
+  let running=0;
+  get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+    <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Linha</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HL</th>
   </tr>`;
+  get('modal-tbody').innerHTML=sortedLinhas.length>0
+    ? sortedLinhas.map((p,i)=>{
+        running+=p.brl; const cum=(running/total*100).toFixed(1);
+        const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+        const dept=NOME_TO_DEF[p.nome]?.dept||'';
+        const dclr=dept==='Entrega'?'#f59e0b':dept==='Armazém'?'#2d7ef7':dept==='Puxada'?'#22c55e':'#a78bfa';
+        return`<tr style="border-bottom:1px solid #1a2030;cursor:pointer" onclick="openModalLinhaProds('${dimKey}','${dimNome.replace(/'/g,"\\'")}','${dimLabel}','${p.nome.replace(/'/g,"\\'")}',null)">
+          <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+          <td style="padding:7px 12px;color:#e2e8f4;font-size:12px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dclr};margin-right:6px;vertical-align:middle"></span>${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+          <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Nenhum produto encontrado.</td></tr>`;
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
 
-  get('modal-tbody').innerHTML = sorted.length > 0
-    ? sorted.map((p,i) => {
-        running += p.brl;
-        const cum = (running/total*100).toFixed(1);
-        const clr = parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
-        return `<tr style="border-bottom:1px solid #1a2030">
+// Nível 2: Linha → produtos (dentro do contexto marca/embalagem)
+function openModalLinhaProds(dimKey, dimNome, dimLabel, linhaNome, filteredCache) {
+  const {base, ano, mesAte} = S;
+  const mesesSel = S.mesesSel||Array.from({length:mesAte},(_,i)=>i+1);
+  const linhaF_arr=msGetValues('ms-me-linha');
+  const deptF=document.getElementById('sel-me-dept').value;
+
+  // Se não recebeu cache (chamado via onclick inline), refaz o filtro
+  const filtered = filteredCache || S.rawProd.filter(r=>
+    (base==='ALL'||r.base===base) &&
+    r.ano===ano && r.mes<=mesAte && mesesSel.includes(r.mes) &&
+    r[dimKey] === dimNome &&
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
+    (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
+  );
+
+  const prodMap={};
+  filtered.filter(r=>r.linha===linhaNome).forEach(r=>{
+    if(!r.prod) return;
+    prodMap[r.prod]=prodMap[r.prod]||{brl:0,hl:0};
+    prodMap[r.prod].brl+=r.brl; prodMap[r.prod].hl+=r.hl;
+  });
+  const sorted=Object.entries(prodMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+  const total=sorted.reduce((s,p)=>s+p.brl,0);
+
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(dimNome,()=>openModal(dimKey,dimNome,dimLabel)));
+  bc.appendChild(_bcSep()); bc.appendChild(_bcItem(linhaNome,null));
+
+  get('modal-title').textContent=linhaNome;
+  get('modal-sub').textContent=`${sorted.length} produto(s) · ${fmtBRL(total)} · ${dimLabel}: ${dimNome}`;
+  get('modal-pareto-label').textContent='Pareto de Produtos';
+
+  if(sorted.length>0) setTimeout(()=>makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$'),50);
+
+  let running=0;
+  get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+    <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Produto</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HL</th>
+  </tr>`;
+  get('modal-tbody').innerHTML=sorted.length>0
+    ? sorted.map((p,i)=>{running+=p.brl;const cum=(running/total*100).toFixed(1);const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+        return`<tr style="border-bottom:1px solid #1a2030">
           <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
           <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
           <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px">${fmtBRL(p.brl)}</td>
           <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
           <td style="padding:7px 12px;text-align:right;color:#2d7ef7;font-size:12px">${p.hl>0?fmtHL(p.hl):'—'}</td>
-          <td style="padding:7px 12px;color:#5a6a88;font-size:11px">${p.linhas}</td>
-        </tr>`;
-      }).join('')
-    : `<tr><td colspan="6" style="padding:40px;text-align:center;color:#5a6a88">
-        Nenhum produto encontrado para esta seleção.
-      </td></tr>`;
-
-  get('modal-overlay').style.display = 'block';
-  get('modal-prod').style.display = 'flex';
+        </tr>`;}).join('')
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Nenhum produto identificado.</td></tr>`;
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
 }
 
 function closeModal() {
@@ -3733,9 +3855,9 @@ function renderMensal() {
   const paretoItems=Object.entries(linhaMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
   dchart('c-mensal-pareto');
   if(paretoItems.length>0) makePareto('c-mensal-pareto',paretoItems.slice(0,15),'nome','brl',fmtBRL,'R$ por Linha',
-    (idx)=>{
-      const linha=paretoItems[idx]?.nome; if(!linha) return;
-      openMensalLinhaModal(mesSel, semanaSel, linha);
+    (nome)=>{
+      if(!nome) return;
+      openMensalLinhaModal(mesSel, semanaSel, nome);
     });
 
   // ── Tabela semanal ──
