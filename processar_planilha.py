@@ -178,21 +178,22 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     vl = sf(row[20])   # Col U (idx 20) — Valor total
     if vl <= 0: continue
 
-    # Col AA (idx 26) — código produto, Col AB (idx 27) — descrição produto
-    cod_prod = int(row[26]) if isinstance(row[26],(int,float)) else None
-    prod     = str(row[27] or '').strip()
-    motorista = str(row[35] or '').strip()  # Col AJ (idx 35) — Nome Motorista
+    # Col P (idx 15) = código produto, Col Q (idx 16) = descrição produto
+    cod_prod  = int(row[15]) if isinstance(row[15],(int,float)) else None
+    prod      = str(row[16] or '').strip()
+    motorista = str(row[35] or '').strip()   # Col AJ (idx 35) — Nome Motorista
+    setor     = str(row[69] or '').strip()   # Col BN (idx 69) — Setor Venda
 
     add(data, linha, base, dt.year, dt.month, vl)
-    if prod and vl:
-        info = lookup.get(cod_prod, {}) if cod_prod else {}
-        rawProd.append({
-            'base': base, 'ano': dt.year, 'mes': dt.month,
-            'linha': linha, 'prod': prod,
-            'brl': round(vl, 2), 'hl': 0.0,
-            'marca': info.get('marca',''), 'embal': info.get('embal',''),
-            'motorista': motorista
-        })
+    info = lookup.get(cod_prod, {}) if cod_prod else {}
+    rawProd.append({
+        'base': base, 'ano': dt.year, 'mes': dt.month,
+        'linha': linha, 'prod': prod or 'Não identificado',
+        'brl': round(vl, 2), 'hl': 0.0,
+        'marca': info.get('marca',''), 'embal': info.get('embal',''),
+        'motorista': motorista,
+        'setor': setor
+    })
     n_nova += 1
     if n_nova % 10000 == 0: print(f"   {n_nova:,} linhas 03.18.05...")
 print(f"   ✓ {n_nova:,} linhas 03.18.05 processadas")
@@ -270,17 +271,21 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     vl = sf(row[20])   # Col U (idx 20) — Valor total
     if vl <= 0: continue
 
-    cod_prod  = int(row[26]) if isinstance(row[26],(int,float)) else None
-    prod      = str(row[27] or '').strip()
+    cod_prod  = int(row[15]) if isinstance(row[15],(int,float)) else None
+    prod      = str(row[16] or '').strip()
     motorista = str(row[35] or '').strip()  # Col AJ — Nome Motorista
+    setor     = str(row[69] or '').strip()  # Col BN — Setor Venda
     ds        = dt.strftime('%Y-%m-%d')
     info      = lookup.get(cod_prod, {}) if cod_prod else {}
 
     rawDiario.append({
         'base': base, 'data': ds, 'linha': linha,
         'brl': round(vl, 2), 'hl': 0.0,
-        'prod': prod, 'marca': info.get('marca',''), 'embal': info.get('embal',''),
-        'wqi': False, 'op': 0, 'motorista': motorista
+        'prod': prod or 'Não identificado',
+        'marca': info.get('marca',''), 'embal': info.get('embal',''),
+        'wqi': False, 'op': 0,
+        'motorista': motorista,
+        'setor': setor
     })
     n_dnova += 1
 print(f"   ✓ {n_dnova} registros diários 03.18.05")
