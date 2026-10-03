@@ -4029,9 +4029,9 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
       setTimeout(()=>{
         const cv=get('c-modal-pareto'); cv.style.cursor='pointer';
         makePareto('c-modal-pareto',sortedMot.slice(0,20),'nome','brl',fmtBRL,'R$');
-        cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedMot.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'motorista',match.prods);};
+        cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedMot.find(s=>s.nome===lbl);if(match)openMensalNivel3(mesSel,semanaSel,lblPeriodo,linha,lbl,'motorista',match.prods);};
       },50);
-      _renderDetalheTabela(sortedMot,total,['Motorista','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','motorista',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+      _renderDetalheTabela(sortedMot,total,['Motorista','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openMensalNivel3('${mesSel}','${semanaSel}','${lblPeriodo.replace(/'/g,"\\'")}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','motorista',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
     } else {
       // sem detalhe de motorista — mostra por data
       const sorted=_agrupaMensalPorData();
@@ -4045,8 +4045,8 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
     if(sortedSet.length>0) {
       const total=sortedSet.reduce((s,p)=>s+p.brl,0);
       get('modal-pareto-label').textContent='Ranking de Setores — clique para ver produtos';
-      setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='pointer';makePareto('c-modal-pareto',sortedSet.slice(0,20),'nome','brl',fmtBRL,'R$');cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedSet.find(s=>s.nome===lbl);if(match)openDiarioNivel3(mesSel+'-01',dd,linha,lbl,'setor',match.prods);};},50);
-      _renderDetalheTabela(sortedSet,total,['Setor','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openDiarioNivel3('${mesSel}-01','${dd}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','setor',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
+      setTimeout(()=>{const cv=get('c-modal-pareto');cv.style.cursor='pointer';makePareto('c-modal-pareto',sortedSet.slice(0,20),'nome','brl',fmtBRL,'R$');cv.onclick=(e)=>{const inst=CH['c-modal-pareto'];if(!inst)return;const pts=inst.getElementsAtEventForMode(e,'nearest',{intersect:true},false);if(!pts.length)return;const lbl=inst.data.labels[pts[0].index];const match=sortedSet.find(s=>s.nome===lbl);if(match)openMensalNivel3(mesSel,semanaSel,lblPeriodo,linha,lbl,'setor',match.prods);};},50);
+      _renderDetalheTabela(sortedSet,total,['Setor','R$','% Acum.','HLs'],p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px;cursor:pointer" onclick="openMensalNivel3('${mesSel}','${semanaSel}','${lblPeriodo.replace(/'/g,"\\'")}','${linha.replace(/'/g,"\\'")}','${p.nome.replace(/'/g,"\\'")}','setor',${JSON.stringify(p.prods)})">${p.nome}</td><td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td><td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td><td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:11px">${fmtHL(p.hl)}</td>`);
     } else {
       const sorted=_agrupaMensalPorData();
       const total=sorted.reduce((s,p)=>s+p.brl,0);
@@ -4071,6 +4071,43 @@ function openMensalLinhaModal(mesSel, semanaSel, linha) {
     get('modal-sub').textContent = 'Erro ao carregar detalhes — verifique o console';
     get('modal-tbody').innerHTML = `<tr><td colspan="5" style="padding:20px;color:#ef4444;text-align:center">Erro: ${e.message}</td></tr>`;
   }
+}
+
+// Drill-down nível 3 para visão mensal: período › linha › motorista/setor › produtos
+function openMensalNivel3(mesSel, semanaSel, lblPeriodo, linha, chave, tipo, prodsObj) {
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(mesSel, ()=>openMensalModal(mesSel,'ALL')));
+  if(semanaSel!=='ALL'){
+    bc.appendChild(_bcSep());
+    bc.appendChild(_bcItem(lblSemana(parseInt(semanaSel)), ()=>openMensalModal(mesSel,semanaSel)));
+  }
+  bc.appendChild(_bcSep());
+  bc.appendChild(_bcItem(linha, ()=>openMensalLinhaModal(mesSel,semanaSel,linha)));
+  bc.appendChild(_bcSep());
+  bc.appendChild(_bcItem(chave, null));
+
+  get('modal-title').textContent=chave;
+  get('modal-sub').textContent=`${tipo==='motorista'?'Motorista':'Setor'} — ${lblPeriodo}`;
+  get('modal-pareto-label').textContent='Pareto de Produtos';
+
+  let sorted;
+  if(prodsObj && typeof prodsObj==='object') {
+    sorted=Object.entries(prodsObj).map(([k,v])=>({nome:k,brl:v,hl:0})).sort((a,b)=>b.brl-a.brl);
+  } else {
+    const mes=parseInt(mesSel.split('-')[1]), anoD=parseInt(mesSel.split('-')[0]);
+    const {base}=S;
+    const rows=S.rawProd.filter(r=>r.linha===linha&&(base==='ALL'||r.base===base)&&r.mes===mes&&r.ano===anoD&&
+      (tipo==='motorista'?(r.motorista||'(sem motorista)')===chave:(r.setor||'(sem setor)')===chave));
+    const mapP={}; rows.forEach(r=>{ mapP[r.prod||'?']=mapP[r.prod||'?']||{brl:0,hl:0}; mapP[r.prod||'?'].brl+=r.brl; mapP[r.prod||'?'].hl+=r.hl; });
+    sorted=Object.entries(mapP).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.brl-a.brl);
+  }
+  const total=sorted.reduce((s,p)=>s+p.brl,0);
+  if(sorted.length>0) setTimeout(()=>{const cv=get('c-modal-pareto'); cv.style.cursor='default'; cv.onclick=null; makePareto('c-modal-pareto',sorted.slice(0,25),'nome','brl',fmtBRL,'R$');},50);
+  _renderDetalheTabela(sorted, total, ['Produto','R$','% Acum.'],
+    p=>`<td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+        <td style="padding:7px 12px;text-align:right;color:#e2e8f4;font-size:12px;font-weight:600">${fmtBRL(p.brl)}</td>
+        <td style="padding:7px 12px;text-align:right;font-weight:700;font-size:12px;color:{{clr}}">{{cum}}</td>`);
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
 }
 
 // ═══════════════════════════════════════════════════════
