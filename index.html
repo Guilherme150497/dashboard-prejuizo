@@ -74,7 +74,7 @@ input[type=file]{display:none}
 .kpi.amber::after{background:var(--amber)}.kpi.green::after{background:var(--green)}.kpi.red::after{background:var(--red)}.kpi.blue::after{background:var(--blue)}
 .kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-weight:600}
 .kpi-value{font-size:20px;font-weight:700;font-family:var(--mono);line-height:1.1}
-.kpi-sub{font-size:10px;color:var(--muted);margin-top:4px}
+.kpi-sub{font-size:11px;color:var(--text);opacity:.72;margin-top:4px;font-weight:500}
 
 /* ── PANEL ── */
 .panel{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
@@ -93,9 +93,10 @@ th{background:var(--s2);color:var(--muted);font-size:10px;letter-spacing:.8px;te
 th.left{text-align:left}
 td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);font-family:var(--mono);color:var(--text);white-space:nowrap}
 td.left{text-align:left;font-family:var(--font);color:var(--muted)}
-td.dept{text-align:left;font-family:var(--font);font-weight:700;color:var(--amber);background:var(--s2);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:10px 12px}
+td.dept{text-align:left;font-family:var(--font);font-weight:700;color:var(--text);background:var(--bg);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:14px 12px 6px;border-bottom:2px solid var(--accent);border-top:1px solid var(--border)}
 tr:last-child td{border-bottom:none}
-tr.total-row td{background:rgba(240,163,10,.08);font-weight:700;color:var(--amber)}
+tr.total-row td{background:transparent;font-weight:700;color:var(--text);border-top:1px solid var(--border);border-bottom:2px solid rgba(255,255,255,.07)}
+tr.total-row td.left{color:var(--muted);font-size:11px;letter-spacing:.3px}
 tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
 .red{color:var(--red)}.green{color:var(--green)}.muted{color:var(--muted)}
 
@@ -296,6 +297,12 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
         <div class="panel-head"><div class="panel-title">Evolução Mensal Total</div></div>
         <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-evol"></canvas></div></div>
       </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div><div class="panel-title">Dispersão — Meta Período vs Acumulado Ano</div><div class="panel-sub">Cada ponto é uma linha de prejuízo · acima da diagonal = acima da meta</div></div>
+      </div>
+      <div class="panel-body"><div class="chart-wrap" style="height:320px"><canvas id="c-scatter-pacote"></canvas></div></div>
     </div>
   </div>
 
@@ -614,7 +621,7 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
 
   <!-- ══ MODAL DRILL-DOWN PRODUTOS ══ -->
   <div id="modal-overlay" onclick="closeModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;backdrop-filter:blur(2px)"></div>
-  <div id="modal-prod" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(92vw,860px);max-height:85vh;background:#131720;border:1px solid #1c2333;border-radius:12px;z-index:1001;overflow:hidden;flex-direction:column">
+  <div id="modal-prod" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(96vw,1300px);max-height:92vh;background:#131720;border:1px solid #1c2333;border-radius:12px;z-index:1001;overflow:hidden;flex-direction:column">
     <div style="padding:18px 22px;background:#0c0f14;border-bottom:1px solid #1c2333;display:flex;align-items:center;justify-content:space-between">
       <div>
         <div id="modal-title" style="font-size:16px;font-weight:700;color:#e2e8f4"></div>
@@ -772,7 +779,7 @@ LINHAS_DEF.filter(d=>d.op===108).forEach(d => CODES_MAP[d.cod] = d.nome);
 
 const DEPTS = ['Entrega','Armazém','Puxada'];
 const DEPTS_ALL = ['Entrega','Armazém','Puxada','Erro de Programação','Diferença de AG'];
-const DEPTS_SEPARADOS = ['Erro de Programação','Diferença de AG']; // não entram no total
+const DEPTS_SEPARADOS = ['Diferença de AG']; // Diferença de AG não entra no total (EP entra)
 const NOMES_TOTAL = ALL_NOMES.filter(n => !DEPTS_SEPARADOS.includes(NOME_TO_DEF[n].dept));
 const C16 = ['#2d7ef7','#ef4444','#22c55e','#2d7ef7','#a78bfa','#d97706','#1abc9c','#e67e22','#e74c3c','#2ecc71','#3498db','#f39c12','#16a085','#8e44ad','#d35400','#27ae60'];
 const DEPT_C = {Entrega:'#2d7ef7', Armazém:'#f59e0b', Puxada:'#22c55e', 'Erro de Programação':'#d97706', 'Diferença de AG':'#a78bfa'};
@@ -1404,6 +1411,8 @@ function getMetaRHLPuxado(nome, base, ano, mes) {
 
 function getMs(ateM){ return (S.mesesSel||[]).filter(m=>m<=ateM).length ? (S.mesesSel||[]).filter(m=>m<=ateM) : Array.from({length:ateM},(_,i)=>i+1); }
 function sumBRL(nome,base,ano,ateM) { let s=0; getMs(ateM).forEach(m=>s+=getBRL(nome,base,ano,m)); return s; }
+// sumBRLFull: sempre soma Jan→ateM, ignora filtro mesesSel — para coluna "Acumulado Ano"
+function sumBRLFull(nome,base,ano,ateM) { let s=0; for(let m=1;m<=ateM;m++) s+=getBRL(nome,base,ano,m); return s; }
 function sumHL(nome,base,ano,ateM)  { let s=0; getMs(ateM).forEach(m=>s+=getHL(nome,base,ano,m));  return s; }
 function sumMeta(nome,base,ano,ateM){ let s=0; getMs(ateM).forEach(m=>s+=getMeta(nome,base,ano,m)); return s; }
 function sumVol(base,ano,ateM)      { let s=0; getMs(ateM).forEach(m=>s+=getVol(base,ano,m)); return s; }
@@ -1544,8 +1553,8 @@ function renderPacote() {
     <div class="kpi amber"><div class="kpi-label">Entrega</div><div class="kpi-value">${fmtBRL(dTot.Entrega)}</div><div class="kpi-sub">${tot>0?(dTot.Entrega/tot*100).toFixed(1)+'% do total':''}</div></div>
     <div class="kpi blue"><div class="kpi-label">Armazém</div><div class="kpi-value">${fmtBRL(dTot.Armazém)}</div><div class="kpi-sub">${tot>0?(dTot.Armazém/tot*100).toFixed(1)+'% do total':''}</div></div>
     <div class="kpi green"><div class="kpi-label">Puxada</div><div class="kpi-value">${fmtBRL(dTot.Puxada)}</div><div class="kpi-sub">${tot>0?(dTot.Puxada/tot*100).toFixed(1)+'% do total':''}</div></div>
-    <div class="kpi" style="border-left:3px solid var(--amber2)"><div class="kpi-label">⚙️ Erro de Programação</div><div class="kpi-value" style="color:var(--amber2)">${fmtBRL(totEP)}</div><div class="kpi-sub">Separado do total</div></div>
-    <div class="kpi" style="border-left:3px solid var(--purple)"><div class="kpi-label">⚠️ Diferença de AG</div><div class="kpi-value" style="color:var(--purple)">${fmtBRL(totAG)}</div><div class="kpi-sub">Separado do total</div></div>
+    <div class="kpi" style="border-left:3px solid var(--amber2)"><div class="kpi-label">⚙️ Erro de Programação</div><div class="kpi-value" style="color:var(--amber2)">${fmtBRL(totEP)}</div><div class="kpi-sub">${tot>0?(totEP/tot*100).toFixed(1)+'% do total':''}</div></div>
+    <div class="kpi" style="border-left:3px solid var(--purple);opacity:.6"><div class="kpi-label" style="color:var(--purple)">⚠️ Diferença de AG</div><div class="kpi-value" style="color:var(--purple);font-size:16px">${fmtBRL(totAG)}</div><div class="kpi-sub">Não entra no total</div></div>
   `;
 
   // Table
@@ -1568,16 +1577,17 @@ function renderPacote() {
     const totSep = isAG ? totAG : isEP ? sumBRL('Erro de Programação',base,ano,mesAte) : 0;
     html += `<tr><td colspan="${5+S.mesesSel.length}" class="dept" style="${isAG?'color:var(--purple);border-top:2px solid var(--purple)':isEP?'color:var(--amber);border-top:2px solid var(--amber)':''}">${isAG?'⚠️ '+dept+' — Separado do Total Geral':isEP?'⚙️ '+dept+' — Separado do Total Geral':dept}</td></tr>`;
 
-    let dBRL=0,dMeta=0;
+    let dBRL=0,dMeta=0,dAcum=0;
     ls.forEach(nome => {
-      const acum  = sumBRL(nome,base,ano,mesAte);
+      const acum  = sumBRL(nome,base,ano,mesAte);       // período filtrado (mesesSel)
+      const acumFull = sumBRLFull(nome,base,ano,mesAte); // jan→mesAte fixo
       const metaA = sumMeta(nome,base,ano,12);
       const metaP = sumMeta(nome,base,ano,mesAte);
       // % participação: AG usa seu próprio total, outros usam tot geral
       const base_ = isAG ? totAG : tot;
-      const partTot = base_>0 ? (acum/base_*100).toFixed(0)+'%' : '0%';
-      const cls2 = metaP>0&&acum>metaP?'red':'green';
-      dBRL+=acum; dMeta+=metaP;
+      const partTot = base_>0 ? (acumFull/base_*100).toFixed(0)+'%' : '0%';
+      const cls2 = metaP>0&&acumFull>metaP?'red':'green';
+      dBRL+=acum; dMeta+=metaP; dAcum+=acumFull;
       const meses = MESES.slice(0,mesAte).map((_,i)=>{
         if(!S.mesesSel.includes(i+1)) return '';
         const v=getBRL(nome,base,ano,i+1);
@@ -1589,7 +1599,7 @@ function renderPacote() {
         <td>${fmtBRL(metaA)}</td>
         <td>${fmtBRL(metaP)}</td>
         <td>${partTot}</td>
-        <td class="${cls2}"><strong>${fmtBRL(acum)}</strong></td>
+        <td class="${cls2}"><strong>${fmtBRL(acumFull)}</strong></td>
         ${meses}
       </tr>`;
     });
@@ -1599,7 +1609,7 @@ function renderPacote() {
       return `<td>${fmtBRL(s,true)}</td>`;
     }).join('');
     html+=`<tr class="total-row"><td class="left">Total ${dept}</td>
-      <td>—</td><td>${fmtBRL(dMeta)}</td><td>—</td><td>${fmtBRL(dBRL)}</td>${mesesD}</tr>`;
+      <td>—</td><td>${fmtBRL(dMeta)}</td><td>—</td><td>${fmtBRL(dAcum)}</td>${mesesD}</tr>`;
   });
   html+='</tbody></table>';
   document.getElementById('t-pacote').innerHTML=html;
@@ -1618,6 +1628,53 @@ function renderPacote() {
   const totMetaMes=Array.from({length:mesAte},(_,i)=>{let s=0;NOMES_TOTAL.forEach(n=>s+=getMeta(n,base,ano,i+1));return s;});
   dchart('c-evol'); const c2=get('c-evol').getContext('2d');
   CH['c-evol']=new Chart(c2,{type:'bar',data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{label:'R$',data:totMes,backgroundColor:totMes.map((v,i)=>barColor(v,totMetaMes[i])),borderRadius:3},{label:'Meta',data:totMetaMes,backgroundColor:'rgba(255,255,255,.08)',borderColor:'rgba(255,255,255,.25)',borderWidth:1,type:'bar'}]},options:{...coBase(),plugins:{legend:{display:true,labels:{color:'#5a6a88',font:{size:11},boxWidth:12}}}}});
+
+  // Scatter: Meta Período × Acumulado Ano por linha
+  const DEPT_CLRS={'Entrega':'#f59e0b','Armazém':'#2d7ef7','Puxada':'#22c55e','Diferença de AG':'#a78bfa','Erro de Programação':'#fb923c'};
+  const scPoints=NOMES_TOTAL.map(nome=>{
+    const metaP=sumMeta(nome,base,ano,mesAte);
+    const acumF=sumBRLFull(nome,base,ano,mesAte);
+    return {x:metaP, y:acumF, nome, dept:NOME_TO_DEF[nome].dept};
+  }).filter(p=>p.x>0||p.y>0);
+  const maxVal=Math.max(...scPoints.map(p=>Math.max(p.x,p.y)),1)*1.12;
+  dchart('c-scatter-pacote'); const c3=get('c-scatter-pacote').getContext('2d');
+  CH['c-scatter-pacote']=new Chart(c3,{
+    type:'scatter',
+    data:{datasets:[
+      // diagonal reference line
+      {type:'line',label:'Meta = Realizado',data:[{x:0,y:0},{x:maxVal,y:maxVal}],
+        borderColor:'rgba(255,255,255,.18)',borderWidth:1,borderDash:[5,5],
+        pointRadius:0,fill:false,tension:0,order:0},
+      // pontos por dept
+      ...Object.entries(DEPT_CLRS).map(([dept,clr])=>{
+        const pts=scPoints.filter(p=>p.dept===dept);
+        if(!pts.length) return null;
+        return {label:dept,data:pts.map(p=>({x:p.x,y:p.y,nome:p.nome})),
+          backgroundColor:clr+'cc',borderColor:clr,borderWidth:1,pointRadius:6,pointHoverRadius:9,order:1};
+      }).filter(Boolean)
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,labels:{color:'#5a6a88',font:{size:11},boxWidth:10,padding:12}},
+        tooltip:{
+          backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1,
+          callbacks:{
+            title:items=>{const d=items[0]?.raw;return d?.nome||'';},
+            label:items=>{const d=items.raw;if(!d?.nome) return '';return [`Meta Período: ${fmtBRL(d.x)}`,`Acumulado Ano: ${fmtBRL(d.y)}`,`${d.y>d.x?'⚠️ Acima da meta':'✅ Dentro da meta'}`];}
+          }
+        }
+      },
+      scales:{
+        x:{title:{display:true,text:'Meta Período (R$)',color:'#5a6a88',font:{size:11}},
+          ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},
+          grid:{color:'rgba(48,54,61,.4)'},min:0,max:maxVal},
+        y:{title:{display:true,text:'Acumulado Ano (R$)',color:'#5a6a88',font:{size:11}},
+          ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},
+          grid:{color:'rgba(48,54,61,.4)'},min:0,max:maxVal}
+      }
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════
