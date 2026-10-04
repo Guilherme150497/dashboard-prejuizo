@@ -528,6 +528,15 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
   </div>
   <div class="section" id="s-axa">
     <div class="filter-row">
+      <span class="filter-label">Departamento:</span>
+      <select id="sel-dept-axa" onchange="renderAxa()">
+        <option value="ALL">Todos os depart.</option>
+        <option value="Entrega">Entrega</option>
+        <option value="Armazém">Armazém</option>
+        <option value="Puxada">Puxada</option>
+        <option value="Erro de Programação">Erro de Programação</option>
+        <option value="Diferença de AG">Diferença de AG</option>
+      </select>
       <span class="filter-label">Linha:</span>
       <select id="sel-linha-axa" onchange="renderAxa()"><option value="TOTAL">Total Geral</option></select>
     </div>
@@ -768,14 +777,8 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     <div class="filter-row">
       <span class="filter-label">Mês:</span>
       <select id="sel-resumo-mes" onchange="renderResumo()"></select>
-      <select id="sel-resumo-dept" onchange="renderResumo()">
-        <option value="ALL">Todos os depart.</option>
-        <option value="Entrega">Entrega</option>
-        <option value="Armazém">Armazém</option>
-        <option value="Puxada">Puxada</option>
-        <option value="Erro de Programação">Erro de Programação</option>
-        <option value="Diferença de AG">Diferença de AG</option>
-      </select>
+      <span class="filter-label">Departamento:</span>
+      <div class="ms-wrap" id="ms-resumo-dept"><button class="ms-btn">Todos os departamentos</button><div class="ms-dropdown"></div></div>
     </div>
     <div class="kpi-row" id="kpi-resumo"></div>
     <div class="panel">
@@ -1869,7 +1872,9 @@ function renderHL() {
     data:{labels:rankData.map(r=>r.nome),datasets:[{data:rankData.map(r=>r.hl),backgroundColor:rankClrs,borderRadius:4}]},
     options:{
       ...coBase(),indexAxis:'y',
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
+      onClick:(_,els)=>{if(els.length){openHLProdModal(rankData[els[0].index].nome);}},
+      onHover:(_,els)=>{get('c-hl-ranking').style.cursor=els.length?'pointer':'default';},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL · clique para ver produtos`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
       scales:{
         x:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(1)+' HL'},grid:{color:'rgba(48,54,61,.4)'}},
         y:{ticks:{color:'#e2e8f4',font:{size:11},padding:4},grid:{display:false}}
@@ -1885,14 +1890,17 @@ function renderHL() {
   const maxEv=Math.max(...evolData,0);
   const evolClrs=evolData.map(v=>v>=maxEv*0.8?'rgba(239,68,68,.85)':v>=maxEv*0.5?'rgba(245,158,11,.8)':'rgba(45,126,247,.75)');
   dchart('c-hl-linha'); const cL=get('c-hl-linha').getContext('2d');
+  const evolMeses=getMs(mesAte);
   CH['c-hl-linha']=new Chart(cL,{
     type:'bar',
-    data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[
+    data:{labels:evolMeses.map(m=>MESES[m-1]),datasets:[
       {type:'line',label:'Tendência',data:evolData,borderColor:'rgba(255,255,255,.3)',borderWidth:1.5,pointRadius:0,tension:.4,fill:false,order:0},
       {label:'HL',data:evolData,backgroundColor:evolClrs,borderRadius:4,order:1}
     ]},
     options:{...coBase(),
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
+      onClick:(_,els)=>{const bar=els.find(e=>e.datasetIndex===1);if(bar!=null) openHLMesModal(evolMeses[bar.index],linhasEv);},
+      onHover:(_,els)=>{get('c-hl-linha').style.cursor=els.some(e=>e.datasetIndex===1)?'pointer':'default';},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.datasetIndex===1?`${fmtHL(c.raw)} HL · clique para ver produtos`:`Tendência: ${fmtHL(c.raw)} HL`},backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1}},
       scales:{
         x:{ticks:{color:'#5a6a88',font:{size:11}},grid:{display:false}},
         y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>v.toFixed(1)},grid:{color:'rgba(48,54,61,.4)'}}
@@ -2109,13 +2117,29 @@ function renderRHL() {
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
   const totBRL=sumBRL2(linhas,base,ano,mesAte);
-  const totVol=sumVol(base,ano,mesAte)||sumVolEntregue(base,ano,mesAte);
+  // Volume acumulado: usa getVolParaRHL (mesma lógica das tabelas individuais)
+  const totVol=(()=>{ let s=0; getMs(mesAte).forEach(m=>s+=getVolParaRHL(base,ano,m)); return s; })();
   const totRHL=totVol>0?totBRL/totVol:0;
+  // Meta R$/HL acumulada: soma meta BRL das linhas / volume acumulado
+  const totMetaBRL=linhas.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
+  const metaRHLAcum=totVol>0?totMetaBRL/totVol:0;
+  const rhlPctMeta=metaRHLAcum>0?Math.min(totRHL/metaRHLAcum*100,200):0;
+  const rhlBarClr=rhlPctMeta>100?'var(--red)':rhlPctMeta>85?'var(--amber)':'var(--green)';
   document.getElementById('kpi-rhl').innerHTML=`
     <div class="kpi amber">
       <div class="kpi-label">R$/HL Total Acumulado</div>
       <div class="kpi-value">${fmtRHL(totRHL)}</div>
-      <div class="kpi-sub">Vol entregue: ${fmtHL(totVol)} HL · ${MESES[mesAte-1]}/${ano}</div>
+      ${metaRHLAcum>0?`
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+        <div style="height:4px;background:var(--s1);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${Math.min(rhlPctMeta,100)}%;background:${rhlBarClr};border-radius:2px;transition:width .4s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;color:var(--muted)">Meta ${fmtRHL(metaRHLAcum)}</span>
+          <span style="font-size:10px;font-weight:700;color:${rhlBarClr}">${totRHL>metaRHLAcum?'▲ acima':'▼ abaixo'}</span>
+        </div>
+      </div>`:''}
+      <div class="kpi-sub" style="margin-top:4px">Vol: ${fmtHL(totVol)} HL · até ${MESES[mesAte-1]}/${ano}</div>
     </div>
     ${DEPTS.map(d=>{
       const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d&&(linhaF_arr.includes('ALL')||linhaF_arr.includes(n)));
@@ -2701,6 +2725,7 @@ function renderProd() {
 function renderAxa() {
   const {base}=S;
   const linhaF=document.getElementById('sel-linha-axa').value;
+  const deptF=document.getElementById('sel-dept-axa')?.value||'ALL';
 
   // Get all available years from data
   const anos=[...new Set(
@@ -2710,11 +2735,13 @@ function renderAxa() {
 
   // For each year, show all 12 months (null for months with no data)
   const colors=['#5a8aff','#f59e0b','#22c55e','#ef4444'];
+  const axaLinhas = linhaF==='TOTAL'
+    ? (deptF==='ALL' ? NOMES_TOTAL : ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===deptF))
+    : [linhaF];
   const ds=anos.map((a,i)=>{
     const vals=Array.from({length:12},(_,m)=>{
       let v=0;
-      if(linhaF==='TOTAL') ALL_NOMES.forEach(n=>v+=getBRL(n,base,a,m+1));
-      else v=getBRL(linhaF,base,a,m+1);
+      axaLinhas.forEach(n=>v+=getBRL(n,base,a,m+1));
       return v>0?v:null;  // null = no data yet (shows gap in line)
     });
     // Find last non-null to avoid trailing null confusion
@@ -2765,7 +2792,7 @@ function renderAxa() {
     <th></th>
   </tr></thead><tbody>`;
 
-  const depts=['Entrega','Armazém','Puxada'];
+  const depts=deptF==='ALL'?['Entrega','Armazém','Puxada','Erro de Programação','Diferença de AG']:[deptF];
   depts.forEach(dept=>{
     const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===dept);
     html+=`<tr><td colspan="${2+anos.length*2+1}" class="dept">${dept}</td></tr>`;
@@ -3417,6 +3444,80 @@ function openModalLinhaProds(dimKey, dimNome, dimLabel, linhaNome, filteredCache
   get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
 }
 
+// ── Modal: Visão HL → Ranking de linha → Produtos ──
+function openHLProdModal(linhaNome) {
+  const {base,ano,mesAte}=S;
+  const prodMap={};
+  S.rawProd.filter(r=>(base==='ALL'||r.base===base)&&r.ano===ano&&r.mes<=mesAte&&r.linha===linhaNome&&r.hl>0)
+    .forEach(r=>{prodMap[r.prod]=prodMap[r.prod]||{brl:0,hl:0};prodMap[r.prod].brl+=r.brl;prodMap[r.prod].hl+=r.hl;});
+  const sorted=Object.entries(prodMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.hl-a.hl);
+  const totHL=sorted.reduce((s,p)=>s+p.hl,0);
+
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(linhaNome,null));
+  get('modal-title').textContent=linhaNome;
+  get('modal-sub').textContent=`Produtos por HL · ${sorted.length} produto(s) · ${fmtHL(totHL)} HL até ${MESES[mesAte-1]}/${ano}`;
+  get('modal-pareto-label').textContent='Pareto por HL';
+  if(sorted.length>0) setTimeout(()=>makePareto('c-modal-pareto',sorted.slice(0,20),'nome','hl',fmtHL,'HL'),50);
+
+  get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+    <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Produto</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HL</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Total</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+  </tr>`;
+  let running=0;
+  get('modal-tbody').innerHTML=sorted.length>0
+    ? sorted.map((p,i)=>{running+=p.hl;const cum=totHL>0?(running/totHL*100).toFixed(1):'—';const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+        return`<tr style="border-bottom:1px solid #1a2030">
+          <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+          <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;font-weight:600;color:#2d7ef7;font-size:12px">${fmtHL(p.hl)}</td>
+          <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:12px">${fmtBRL(p.brl)}</td>
+        </tr>`;}).join('')
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Sem dados de produto HL para esta linha.<br><small>Linhas de Reposição/Trocas não registram HL por produto.</small></td></tr>`;
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
+
+// ── Modal: Visão HL → Mês → Produtos (por HL, todas as linhas do clique) ──
+function openHLMesModal(mes, linhas) {
+  const {base,ano}=S;
+  const prodMap={};
+  S.rawProd.filter(r=>(base==='ALL'||r.base===base)&&r.ano===ano&&r.mes===mes&&(linhas.includes(r.linha))&&r.hl>0)
+    .forEach(r=>{prodMap[r.prod]=prodMap[r.prod]||{brl:0,hl:0};prodMap[r.prod].brl+=r.brl;prodMap[r.prod].hl+=r.hl;});
+  const sorted=Object.entries(prodMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.hl-a.hl);
+  const totHL=sorted.reduce((s,p)=>s+p.hl,0);
+
+  const bc=get('modal-breadcrumb'); bc.innerHTML='';
+  bc.appendChild(_bcItem(MESES[mes-1]+'/'+ano,null));
+  get('modal-title').textContent=`Produtos — ${MESES[mes-1]}/${ano}`;
+  get('modal-sub').textContent=`${sorted.length} produto(s) · ${fmtHL(totHL)} HL perdido`;
+  get('modal-pareto-label').textContent='Pareto por HL';
+  if(sorted.length>0) setTimeout(()=>makePareto('c-modal-pareto',sorted.slice(0,20),'nome','hl',fmtHL,'HL'),50);
+
+  get('modal-thead').innerHTML=`<tr style="background:#0c0f14;position:sticky;top:0">
+    <th style="padding:8px 12px;width:28px;color:#5a6a88;font-size:11px">#</th>
+    <th style="padding:8px 12px;text-align:left;color:#5a6a88;font-size:11px">Produto</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">HL</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">% Acum.</th>
+    <th style="padding:8px 12px;text-align:right;color:#5a6a88;font-size:11px">R$</th>
+  </tr>`;
+  let running=0;
+  get('modal-tbody').innerHTML=sorted.length>0
+    ? sorted.map((p,i)=>{running+=p.hl;const cum=totHL>0?(running/totHL*100).toFixed(1):'—';const clr=parseFloat(cum)<=80?'#ef4444':parseFloat(cum)<=95?'#2d7ef7':'#22c55e';
+        return`<tr style="border-bottom:1px solid #1a2030">
+          <td style="padding:7px 12px;text-align:center;color:#5a6a88;font-size:11px">${i+1}</td>
+          <td style="padding:7px 12px;color:#e2e8f4;font-size:12px">${p.nome}</td>
+          <td style="padding:7px 12px;text-align:right;font-weight:600;color:#2d7ef7;font-size:12px">${fmtHL(p.hl)}</td>
+          <td style="padding:7px 12px;text-align:right;color:${clr};font-weight:700;font-size:12px">${cum}%</td>
+          <td style="padding:7px 12px;text-align:right;color:#5a6a88;font-size:12px">${fmtBRL(p.brl)}</td>
+        </tr>`;}).join('')
+    : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#5a6a88">Sem dados de produto HL neste mês.<br><small>Disponível a partir de Set/2026.</small></td></tr>`;
+  get('modal-overlay').style.display='block'; get('modal-prod').style.display='flex';
+}
+
 function closeModal() {
   get('modal-overlay').style.display = 'none';
   get('modal-prod').style.display = 'none';
@@ -3444,15 +3545,20 @@ function renderDiario() {
     (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
   );
 
-  // Aggregate by day
-  const byDay={};
+  // Aggregate by day — Diferença de AG é acumulada separadamente (não entra no total)
+  const byDay={}, byDayAG={};
   filtered.forEach(r=>{
     byDay[r.data]=byDay[r.data]||{brl:0,hl:0};
-    byDay[r.data].brl+=r.brl; byDay[r.data].hl+=r.hl;
+    if(NOME_TO_DEF[r.linha]?.dept==='Diferença de AG'){
+      byDayAG[r.data]=(byDayAG[r.data]||0)+r.brl;
+    } else {
+      byDay[r.data].brl+=r.brl; byDay[r.data].hl+=r.hl;
+    }
   });
   const days=Object.keys(byDay).sort();
   const vals=days.map(d=>byDay[d].brl);
   const total=vals.reduce((a,b)=>a+b,0);
+  const totalAG=Object.values(byDayAG).reduce((a,b)=>a+b,0);
   const maxDay=days[vals.indexOf(Math.max(...vals,0))];
 
   // Volume vendido total do mês (soma de todos os dias do wqiDiario)
@@ -3461,15 +3567,15 @@ function renderDiario() {
       .filter(([d])=>d.startsWith(mesSel))
       .reduce((ss,[,v])=>ss+v.hl_vend,0)
   ,0);
-  const hlPerdMes = filtered.reduce((s,r)=>s+r.hl,0);
+  const hlPerdMes = filtered.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.hl,0);
   const rhlMes = hlVendMes>0 ? total/hlVendMes : 0;
 
-  // KPIs - inclui HL vendido e R$/HL do mês
+  // KPIs - inclui HL vendido e R$/HL do mês (Diferença de AG exibida separadamente, fora do total)
   document.getElementById('kpi-diario').innerHTML=`
     <div class="kpi amber">
       <div class="kpi-label">Total R$ ${mesSel}</div>
       <div class="kpi-value">${fmtBRL(total)}</div>
-      <div class="kpi-sub">${days.length} dias úteis</div>
+      <div class="kpi-sub">${days.length} dias úteis · sem AG</div>
     </div>
     <div class="kpi red">
       <div class="kpi-label">Pior Dia</div>
@@ -3486,6 +3592,7 @@ function renderDiario() {
       <div class="kpi-value">${fmtRHL(rhlMes)}</div>
       <div class="kpi-sub">Prejuízo ÷ HL Vendido</div>
     </div>
+    ${totalAG>0?`<div class="kpi" style="border-left:3px solid var(--purple);opacity:.75"><div class="kpi-label" style="color:var(--purple)">⚠️ Diferença de AG</div><div class="kpi-value" style="color:var(--purple);font-size:16px">${fmtBRL(totalAG)}</div><div class="kpi-sub">Não entra no total</div></div>`:''}
   `;
 
   // Meta diária = meta do mês (linhas filtradas) ÷ dias úteis do mês
@@ -3964,18 +4071,21 @@ function renderMensal() {
   // filtra pela semana selecionada
   const rowsFilt = semanaSel==='ALL' ? rowsMes : rowsMes.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
 
-  // ── KPIs ──
-  const totBRL=rowsFilt.reduce((s,r)=>s+r.brl,0);
-  const totHL=rowsFilt.reduce((s,r)=>s+r.hl,0);
+  // ── KPIs — Diferença de AG excluída do total (mas exibida separadamente) ──
+  const totBRL=rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.brl,0);
+  const totAGMensal=rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept==='Diferença de AG').reduce((s,r)=>s+r.brl,0);
+  const totHL=rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.hl,0);
   const deptMap={}; rowsFilt.forEach(r=>{ const d=NOME_TO_DEF[r.linha]?.dept||'?'; deptMap[d]=(deptMap[d]||0)+r.brl; });
   get('kpi-mensal').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Total R$ — ${semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel))}</div><div class="kpi-value">${fmtBRL(totBRL)}</div></div>
+    <div class="kpi"><div class="kpi-label">Total R$ — ${semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel))}</div><div class="kpi-value">${fmtBRL(totBRL)}</div><div class="kpi-sub">sem Diferença de AG</div></div>
     <div class="kpi"><div class="kpi-label">Total HL</div><div class="kpi-value">${fmtHL(totHL)}</div></div>
-    ${Object.entries(deptMap).map(([d,v])=>`<div class="kpi" style="border-left:3px solid ${DEPT_C[d]||'#fff'}"><div class="kpi-label">${d}</div><div class="kpi-value" style="color:${DEPT_C[d]||'#fff'}">${fmtBRL(v)}</div></div>`).join('')}
+    ${Object.entries(deptMap).filter(([d])=>d!=='Diferença de AG').map(([d,v])=>`<div class="kpi" style="border-left:3px solid ${DEPT_C[d]||'#fff'}"><div class="kpi-label">${d}</div><div class="kpi-value" style="color:${DEPT_C[d]||'#fff'}">${fmtBRL(v)}</div></div>`).join('')}
+    ${totAGMensal>0?`<div class="kpi" style="border-left:3px solid var(--purple);opacity:.75"><div class="kpi-label" style="color:var(--purple)">⚠️ Diferença de AG</div><div class="kpi-value" style="color:var(--purple);font-size:16px">${fmtBRL(totAGMensal)}</div><div class="kpi-sub">Não entra no total</div></div>`:''}
   `;
 
-  // ── Gráfico por semana (barras) ──
+  // ── Gráfico por semana (barras) — AG excluída do total ──
   const semMap={}; rowsMes.filter(r=>linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)).filter(r=>deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
+    .filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG')
     .forEach(r=>{ const s=semanaDoMes(r.data); semMap[s]=(semMap[s]||0)+r.brl; });
   const semsAll=[...new Set(Object.keys(semMap).map(Number))].sort((a,b)=>a-b);
   dchart('c-mensal-semana'); const ctx=get('c-mensal-semana').getContext('2d');
@@ -4577,12 +4687,12 @@ function renderWQI() {
 function renderResumo() {
   const {base,ano} = S;
   const mesSel = get('sel-resumo-mes')?.value || '';
-  const deptF  = get('sel-resumo-dept')?.value || 'ALL';
+  const deptFs = msGetValues('ms-resumo-dept');
   if(!mesSel) return;
   const mes = parseInt(mesSel.split('-')[1]);
   const mesAno = parseInt(mesSel.split('-')[0]);
 
-  const linhas = ALL_NOMES.filter(n => deptF==='ALL' || NOME_TO_DEF[n].dept===deptF);
+  const linhas = ALL_NOMES.filter(n => deptFs.includes('ALL') || deptFs.includes(NOME_TO_DEF[n].dept));
 
   // KPIs do mês
   let totReal=0, totMeta=0, totAG=0;
@@ -4601,7 +4711,7 @@ function renderResumo() {
   `;
 
   // Tabela linha a linha com tendência
-  const deptsShow = deptF==='ALL' ? DEPTS_ALL : [deptF];
+  const deptsShow = deptFs.includes('ALL') ? DEPTS_ALL : DEPTS_ALL.filter(d=>deptFs.includes(d));
   let html=`<table><thead><tr>
     <th class="left">Linha</th>
     <th>Meta Mês</th><th>Real Mês</th><th>Dispersão</th><th>% Meta</th>
@@ -4755,12 +4865,15 @@ function fillSelects() {
     const sel=get(id); if(!sel) return; while(sel.options.length>1) sel.remove(1);
     ALL_NOMES.forEach(n=>{const o=document.createElement('option');o.value=n;o.text=n;sel.add(o);});
   });
-  // Multi-selects
+  // Multi-selects (linhas)
   ['ms-linha-hl','ms-me-linha','ms-diario-linha','ms-mensal-linha','ms-linha-rhl','ms-linha-prod'].forEach(id=>{
     const fn={'ms-linha-hl':renderHL,'ms-me-linha':renderMarcaEmbal,'ms-diario-linha':renderDiario,'ms-mensal-linha':renderMensal,'ms-linha-rhl':renderRHLChart,'ms-linha-prod':renderProd}[id];
     msCreate(id, fn);
     msPopulate(id, ALL_NOMES);
   });
+  // Multi-select (departamentos — Realizado vs Meta)
+  msCreate('ms-resumo-dept', renderResumo);
+  msPopulate('ms-resumo-dept', DEPTS_ALL, 'departamentos');
   // Fill month selects for diario, mensal, wqi and resumo
   const mesesDisp=[...new Set((S.rawDiario||[]).map(r=>r.data.substring(0,7)))].sort();
   ['sel-diario-mes','sel-mensal-mes','sel-wqi-mes','sel-resumo-mes'].forEach(id=>{
@@ -4794,11 +4907,15 @@ function msCreate(id, onChange) {
   document.addEventListener('click', () => drop.classList.remove('open'));
   wrap._onChange = onChange;
 }
-function msPopulate(id, options) {
+function msPopulate(id, options, label) {
   const wrap = get(id);
   if (!wrap) return;
+  if (label) wrap.dataset.msLabel = label;
+  const lbl = wrap.dataset.msLabel || 'linhas';
+  const allText = lbl==='departamentos' ? 'Todos os departamentos' : `Todas as ${lbl}`;
+  wrap.dataset.msAllText = allText;
   const drop = wrap.querySelector('.ms-dropdown');
-  drop.innerHTML = `<label class="ms-item ms-all"><input type="checkbox" value="ALL" checked> Todas as linhas</label>` +
+  drop.innerHTML = `<label class="ms-item ms-all"><input type="checkbox" value="ALL" checked> ${allText}</label>` +
     options.map(o=>`<label class="ms-item"><input type="checkbox" value="${o}" checked> ${o}</label>`).join('');
   drop.querySelectorAll('input').forEach(cb => {
     cb.onchange = () => {
@@ -4827,7 +4944,9 @@ function msUpdateBtn(id) {
   const vals = msGetValues(id);
   const btn = wrap.querySelector('.ms-btn');
   if (!btn) return;
-  btn.textContent = vals.includes('ALL') ? 'Todas as linhas' : vals.length===1 ? vals[0].substring(0,28) : `${vals.length} linhas selecionadas`;
+  const lbl = wrap.dataset.msLabel || 'linhas';
+  const allText = wrap.dataset.msAllText || `Todas as ${lbl}`;
+  btn.textContent = vals.includes('ALL') ? allText : vals.length===1 ? vals[0].substring(0,28) : `${vals.length} ${lbl} selecionados`;
 }
 function msFilter(vals, linha) {
   return vals.includes('ALL') || vals.includes(linha);
