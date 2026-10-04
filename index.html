@@ -850,7 +850,7 @@ const DEPTS_ALL = ['Entrega','Armazém','Puxada','Erro de Programação','Difere
 const DEPTS_SEPARADOS = ['Diferença de AG']; // Diferença de AG não entra no total (EP entra)
 const NOMES_TOTAL = ALL_NOMES.filter(n => !DEPTS_SEPARADOS.includes(NOME_TO_DEF[n].dept));
 const C16 = ['#2d7ef7','#ef4444','#22c55e','#2d7ef7','#a78bfa','#d97706','#1abc9c','#e67e22','#e74c3c','#2ecc71','#3498db','#f39c12','#16a085','#8e44ad','#d35400','#27ae60'];
-const DEPT_C = {Entrega:'#2d7ef7', Armazém:'#f59e0b', Puxada:'#22c55e', 'Erro de Programação':'#d97706', 'Diferença de AG':'#a78bfa'};
+const DEPT_C = {Entrega:'#2d7ef7', Armazém:'#f59e0b', Puxada:'#22c55e', 'Erro de Programação':'#ef4444', 'Diferença de AG':'#a78bfa'};
 
 // ═══════════════════════════════════════════════════════
 // STATE
@@ -1773,7 +1773,7 @@ function renderPacote() {
   CH['c-evol']=new Chart(c2,{type:'bar',data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{label:'R$',data:totMes,backgroundColor:totMes.map((v,i)=>barColor(v,totMetaMes[i])),borderRadius:3},{label:'Meta',data:totMetaMes,backgroundColor:'rgba(255,255,255,.08)',borderColor:'rgba(255,255,255,.25)',borderWidth:1,type:'bar'}]},options:{...coBase(),plugins:{legend:{display:true,labels:{color:'#5a6a88',font:{size:11},boxWidth:12}}}}});
 
   // Scatter: Meta Período × Acumulado Ano por linha
-  const DEPT_CLRS={'Entrega':'#f59e0b','Armazém':'#2d7ef7','Puxada':'#22c55e','Diferença de AG':'#a78bfa','Erro de Programação':'#fb923c'};
+  const DEPT_CLRS={'Entrega':'#f59e0b','Armazém':'#2d7ef7','Puxada':'#22c55e','Diferença de AG':'#a78bfa','Erro de Programação':'#ef4444'};
   const scPoints=NOMES_TOTAL.map(nome=>{
     const metaP=sumMeta(nome,base,ano,mesAte);
     const acumF=sumBRLFull(nome,base,ano,mesAte);
