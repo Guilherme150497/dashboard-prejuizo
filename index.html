@@ -1826,10 +1826,13 @@ function renderPacote() {
 function renderHL() {
   const {base,ano,mesAte}=S;
   const df=document.getElementById('sel-dept-hl').value;
+  // AG só entra quando filtrada diretamente; no total (ALL) usa NOMES_TOTAL que já exclui AG
+  const apenasAGHL = df==='Diferença de AG';
   const linhas=ALL_NOMES.filter(n=>df==='ALL'||NOME_TO_DEF[n].dept===df);
+  const linhasTotal = apenasAGHL ? linhas : (df==='ALL' ? NOMES_TOTAL : linhas.filter(n=>NOME_TO_DEF[n].dept!=='Diferença de AG'));
 
   // ── Totais ──────────────────────────────────────────
-  let totHL=0; linhas.forEach(n=>totHL+=sumHL(n,base,ano,mesAte));
+  let totHL=0; linhasTotal.forEach(n=>totHL+=sumHL(n,base,ano,mesAte));
   const deptHL={};
   DEPTS.forEach(d=>{let s=0;ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===d).forEach(n=>s+=sumHL(n,base,ano,mesAte));deptHL[d]=s;});
 
@@ -2115,16 +2118,19 @@ function renderRHL() {
   const {base,ano,mesAte}=S;
   const df=document.getElementById('sel-dept-rhl').value;
   const linhaF_arr=msGetValues('ms-linha-rhl');
+  const apenasAGRHL = df==='Diferença de AG';
   const linhas=ALL_NOMES.filter(n=>
     (df==='ALL'||NOME_TO_DEF[n].dept===df) &&
     (linhaF_arr.includes('ALL')||linhaF_arr.includes(n))
   );
-  const totBRL=sumBRL2(linhas,base,ano,mesAte);
+  // AG não entra no total quando misturada com outros depts (evita dupla contagem)
+  const linhasParaTot = apenasAGRHL ? linhas : linhas.filter(n=>NOME_TO_DEF[n].dept!=='Diferença de AG');
+  const totBRL=sumBRL2(linhasParaTot,base,ano,mesAte);
   // Volume acumulado: usa getVolParaRHL (mesma lógica das tabelas individuais)
   const totVol=(()=>{ let s=0; getMs(mesAte).forEach(m=>s+=getVolParaRHL(base,ano,m)); return s; })();
   const totRHL=totVol>0?totBRL/totVol:0;
   // Meta R$/HL acumulada: soma meta BRL das linhas / volume acumulado
-  const totMetaBRL=linhas.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
+  const totMetaBRL=linhasParaTot.reduce((s,n)=>s+sumMeta(n,base,ano,mesAte),0);
   const metaRHLAcum=totVol>0?totMetaBRL/totVol:0;
   const rhlPctMeta=metaRHLAcum>0?Math.min(totRHL/metaRHLAcum*100,200):0;
   const rhlBarClr=rhlPctMeta>100?'var(--red)':rhlPctMeta>85?'var(--amber)':'var(--green)';
