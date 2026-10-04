@@ -2804,11 +2804,13 @@ function renderAxa() {
   const depts=deptF==='ALL'?['Entrega','Armazém','Puxada','Erro de Programação','Diferença de AG']:[deptF];
   depts.forEach(dept=>{
     const ls=ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===dept);
-    html+=`<tr><td colspan="${2+anos.length*2+1}" class="dept">${dept}</td></tr>`;
+    if(!ls.length) return;
+    const dC=dept==='Entrega'?'var(--amber)':dept==='Armazém'?'var(--blue)':dept==='Puxada'?'var(--green)':dept==='Erro de Programação'?'#d97706':'var(--purple)';
+    html+=`<tr><td colspan="${2+anos.length*2+1}" class="dept" style="color:${dC}">${dept}</td></tr>`;
     ls.forEach(n=>{
       const vs12=anos.map(a=>({
-        acum:sumBRLFull(n,base,a,S.mesAte),   // Acumulado: jan→mesAte, ignora filtro de período
-        period:sumBRL(n,base,a,S.mesAte)       // Período: conforme filtro selecionado (mesesSel)
+        acum:sumBRLFull(n,base,a,S.mesAte),
+        period:sumBRL(n,base,a,S.mesAte)
       }));
       const last=vs12[vs12.length-1].acum;
       const prev=vs12[vs12.length-2]?.acum||0;
@@ -2823,6 +2825,25 @@ function renderAxa() {
         <td class="${cls}" style="font-weight:700">${vp}${vp!=='—'?'%':''}</td>
       </tr>`;
     });
+    // Subtotal do departamento
+    if(ls.length>1){
+      const dVs=anos.map(a=>({
+        acum:ls.reduce((s,n)=>s+sumBRLFull(n,base,a,S.mesAte),0),
+        period:ls.reduce((s,n)=>s+sumBRL(n,base,a,S.mesAte),0)
+      }));
+      const dLast=dVs[dVs.length-1].acum;
+      const dPrev=dVs[dVs.length-2]?.acum||0;
+      const dVp=dPrev?((dLast-dPrev)/Math.abs(dPrev)*100).toFixed(1):'—';
+      const dCls=parseFloat(dVp)>0?'red':'green';
+      html+=`<tr style="background:var(--s2);font-weight:700;font-size:12px;border-top:1px solid var(--border)">
+        <td class="left" style="color:${dC}">∑ ${dept}</td>
+        ${dVs.map(({acum,period})=>`
+          <td style="border-left:1px solid var(--border);color:${dC}">${fmtBRL(acum)}</td>
+          <td style="color:var(--muted);font-size:11px">${fmtBRL(period)}</td>
+        `).join('')}
+        <td class="${dCls}" style="font-weight:700">${dVp}${dVp!=='—'?'%':''}</td>
+      </tr>`;
+    }
   });
   html+='</tbody></table>';
   document.getElementById('t-axa').innerHTML=html;
@@ -4717,11 +4738,20 @@ function renderResumo() {
     else { totReal+=v; totMeta+=m; }
   });
   const pctMeta = totMeta>0 ? (totReal/totMeta*100).toFixed(1) : '—';
+  // Acumulado ano (sem AG)
+  let totRealAcum=0, totMetaAcum=0;
+  linhas.forEach(n=>{
+    if(NOME_TO_DEF[n].dept==='Diferença de AG') return;
+    totRealAcum+=sumBRLFull(n,base,mesAno,mes);
+    totMetaAcum+=sumMetaFull(n,base,mesAno,mes);
+  });
+  const pctAcum = totMetaAcum>0 ? (totRealAcum/totMetaAcum*100).toFixed(1) : '—';
   document.getElementById('kpi-resumo').innerHTML=`
-    <div class="kpi amber"><div class="kpi-label">Real ${mesSel}</div><div class="kpi-value">${fmtBRL(totReal)}</div></div>
+    <div class="kpi amber"><div class="kpi-label">Real ${mesSel}</div><div class="kpi-value">${fmtBRL(totReal)}</div><div class="kpi-sub">sem Diferença de AG</div></div>
     <div class="kpi blue"><div class="kpi-label">Meta ${mesSel}</div><div class="kpi-value">${fmtBRL(totMeta)}</div></div>
     <div class="kpi ${parseFloat(pctMeta)>100?'red':'green'}"><div class="kpi-label">% da Meta</div><div class="kpi-value">${pctMeta}%</div></div>
-    <div class="kpi" style="border-left:3px solid var(--purple)"><div class="kpi-label">Diferença de AG</div><div class="kpi-value" style="color:var(--purple)">${fmtBRL(totAG)}</div></div>
+    <div class="kpi ${parseFloat(pctAcum)>100?'red':'green'}"><div class="kpi-label">Acum. Ano (Jan→${mesSel.split('-')[1]})</div><div class="kpi-value">${fmtBRL(totRealAcum)}</div><div class="kpi-sub">${pctAcum}% da meta anual · sem AG</div></div>
+    ${totAG>0?`<div class="kpi" style="border-left:3px solid var(--purple)"><div class="kpi-label">Diferença de AG</div><div class="kpi-value" style="color:var(--purple)">${fmtBRL(totAG)}</div><div class="kpi-sub">Não entra no total</div></div>`:''}
   `;
 
   // Tabela linha a linha com tendência
@@ -4742,8 +4772,8 @@ function renderResumo() {
       const real   = getBRL(nome,base,mesAno,mes);
       const meta   = getMeta(nome,base,mesAno,mes);
       const antM   = mes>1 ? getBRL(nome,base,mesAno,mes-1) : getBRL(nome,base,mesAno-1,12);
-      const acum   = sumBRLFull(nome,base,mesAno,mes);   // Acum. Ano: jan→mes selecionado
-      const metaA  = sumMetaFull(nome,base,mesAno,12);  // Meta Ano: sempre jan→dez completo
+      const acum   = sumBRLFull(nome,base,mesAno,mes);
+      const metaA  = sumMetaFull(nome,base,mesAno,12);
       const disp   = real - meta;
       const pct    = meta>0 ? (real/meta*100).toFixed(1)+'%' : '—';
       const pctA   = metaA>0 ? (acum/metaA*100).toFixed(1)+'%' : '—';
@@ -4763,6 +4793,28 @@ function renderResumo() {
         <td style="color:${metaA>0&&acum>metaA?'var(--red)':'var(--green)'};font-weight:600">${pctA}</td>
       </tr>`;
     });
+    // Subtotal por departamento
+    if(ls.length>1){
+      const dReal=ls.reduce((s,n)=>s+getBRL(n,base,mesAno,mes),0);
+      const dMeta=ls.reduce((s,n)=>s+getMeta(n,base,mesAno,mes),0);
+      const dAcum=ls.reduce((s,n)=>s+sumBRLFull(n,base,mesAno,mes),0);
+      const dMetaA=ls.reduce((s,n)=>s+sumMetaFull(n,base,mesAno,12),0);
+      const dDisp=dReal-dMeta;
+      const dPct=dMeta>0?(dReal/dMeta*100).toFixed(1)+'%':'—';
+      const dPctA=dMetaA>0?(dAcum/dMetaA*100).toFixed(1)+'%':'—';
+      const dC=isAG?'var(--purple)':dept==='Entrega'?'var(--amber)':dept==='Armazém'?'var(--blue)':dept==='Puxada'?'var(--green)':'var(--amber)';
+      html+=`<tr style="background:var(--s2);font-weight:700;font-size:12px;border-top:1px solid var(--border)">
+        <td class="left" style="color:${dC}">∑ ${dept}</td>
+        <td style="color:${dC}">${fmtBRL(dMeta)}</td>
+        <td style="color:${dC}">${fmtBRL(dReal)}</td>
+        <td style="color:${dDisp>0?'var(--red)':dDisp<0?'var(--green)':'var(--muted)'}">${dDisp>=0?'+':''}${fmtBRL(dDisp)}</td>
+        <td style="color:${dMeta>0&&dReal>dMeta?'var(--red)':'var(--green)'}">${dPct}</td>
+        <td colspan="2"></td>
+        <td style="color:${dC}">${fmtBRL(dAcum)}</td>
+        <td style="color:var(--muted)">${fmtBRL(dMetaA)}</td>
+        <td style="color:${dMetaA>0&&dAcum>dMetaA?'var(--red)':'var(--green)'}">${dPctA}</td>
+      </tr>`;
+    }
   });
   html+='</tbody></table>';
   get('t-resumo').innerHTML=html;
