@@ -1754,18 +1754,21 @@ function renderPacote() {
   html+='</tbody></table>';
   document.getElementById('t-pacote').innerHTML=html;
 
-  // Dept donut — só os 3 departamentos principais
+  // Dept donut — Entrega, Armazém, Puxada, Erro de Programação (AG separado, sem AG no total)
+  const donutDepts=['Entrega','Armazém','Puxada','Erro de Programação'];
+  const donutColors=[DEPT_C.Entrega,DEPT_C.Armazém,DEPT_C.Puxada,DEPT_C['Erro de Programação']];
   dchart('c-dept'); const c1=get('c-dept').getContext('2d');
   CH['c-dept']=new Chart(c1,{type:'doughnut',data:{
-    labels:[...DEPTS,'Diferença de AG'],
-    datasets:[{data:[...DEPTS.map(d=>dTot[d]||0), totAG],
-      backgroundColor:[DEPT_C.Entrega,DEPT_C.Armazém,DEPT_C.Puxada,'rgba(188,140,255,.7)'],
+    labels:donutDepts,
+    datasets:[{data:donutDepts.map(d=>dTot[d]||0),
+      backgroundColor:donutColors,
       borderColor:['#0c0f14'],borderWidth:3}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#5a6a88',font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtBRL(c.raw)}`}}}}});
 
-  // Evol line — só NOMES_TOTAL (sem AG)
-  const totMes=Array.from({length:mesAte},(_,i)=>{let s=0;NOMES_TOTAL.forEach(n=>s+=getBRL(n,base,ano,i+1));return s;});
-  const totMetaMes=Array.from({length:mesAte},(_,i)=>{let s=0;NOMES_TOTAL.forEach(n=>s+=getMeta(n,base,ano,i+1));return s;});
+  // Evol mensal — respeita filtro de departamento (df), exclui AG do total
+  const evolLinhas = df==='ALL' ? NOMES_TOTAL : ALL_NOMES.filter(n=>NOME_TO_DEF[n].dept===df&&NOME_TO_DEF[n].dept!=='Diferença de AG');
+  const totMes=Array.from({length:mesAte},(_,i)=>{let s=0;evolLinhas.forEach(n=>s+=getBRL(n,base,ano,i+1));return s;});
+  const totMetaMes=Array.from({length:mesAte},(_,i)=>{let s=0;evolLinhas.forEach(n=>s+=getMeta(n,base,ano,i+1));return s;});
   dchart('c-evol'); const c2=get('c-evol').getContext('2d');
   CH['c-evol']=new Chart(c2,{type:'bar',data:{labels:getMs(mesAte).map(m=>MESES[m-1]),datasets:[{label:'R$',data:totMes,backgroundColor:totMes.map((v,i)=>barColor(v,totMetaMes[i])),borderRadius:3},{label:'Meta',data:totMetaMes,backgroundColor:'rgba(255,255,255,.08)',borderColor:'rgba(255,255,255,.25)',borderWidth:1,type:'bar'}]},options:{...coBase(),plugins:{legend:{display:true,labels:{color:'#5a6a88',font:{size:11},boxWidth:12}}}}});
 
