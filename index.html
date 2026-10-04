@@ -3577,7 +3577,9 @@ function renderDiario() {
 
   // Aggregate by day — AG separada do total SOMENTE quando filtro é ALL (junto com outros depts)
   // Quando filtrado especificamente por AG, entra normalmente no byDay
-  const apenasAG = deptF==='Diferença de AG';
+  const apenasAG = deptF==='Diferença de AG' ||
+    (!linhaF_arr.includes('ALL') && linhaF_arr.length>0 &&
+     linhaF_arr.every(n=>NOME_TO_DEF[n]?.dept==='Diferença de AG'));
   const byDay={}, byDayAG={};
   filtered.forEach(r=>{
     byDay[r.data]=byDay[r.data]||{brl:0,hl:0};
@@ -4106,7 +4108,9 @@ function renderMensal() {
   const rowsFilt = semanaSel==='ALL' ? rowsMes : rowsMes.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
 
   // ── KPIs — AG separada do total somente quando misturada com outros depts ──
-  const apenasAGMensal = deptF==='Diferença de AG';
+  const apenasAGMensal = deptF==='Diferença de AG' ||
+    (!linhaF_arr.includes('ALL') && linhaF_arr.length>0 &&
+     linhaF_arr.every(n=>NOME_TO_DEF[n]?.dept==='Diferença de AG'));
   const totBRL=apenasAGMensal ? rowsFilt.reduce((s,r)=>s+r.brl,0) : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.brl,0);
   const totAGMensal=apenasAGMensal ? 0 : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept==='Diferença de AG').reduce((s,r)=>s+r.brl,0);
   const totHL=apenasAGMensal ? rowsFilt.reduce((s,r)=>s+r.hl,0) : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.hl,0);
