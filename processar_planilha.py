@@ -170,7 +170,8 @@ if '03.02.37' in wb.sheetnames:
             'base': base, 'data': ds, 'linha': linha,
             'brl': round(vl, 2), 'hl': hl,
             'prod': prod, 'marca': '', 'embal': '',
-            'wqi': False, 'op': 0
+            'wqi': False, 'op': 0,
+            'motorista': motorista, 'setor': setor
         })
         n_0237 += 1
     print(f"   ✓ {n_0237} registros | meses cobertos: {sorted(MESES_0237)}")
@@ -274,7 +275,7 @@ for row in wb['03.05.17 diária'].iter_rows(min_row=2,values_only=True):
     wqiDiario.setdefault(base,{}).setdefault(ds,{'hl_perd':0.0,'hl_vend':0.0})
     if cod in WQI_CODES: wqiDiario[base][ds]['hl_perd']+=vol
     if op in [1,2]: wqiDiario[base][ds]['hl_vend']+=vol
-    nome=('Diferença de AG' if op==107 else COD_MAP.get(cod))
+    nome=COD_MAP.get(cod) or ('Diferença de AG' if op==107 else None)
     if not nome: continue
     info=lookup.get(cod_prod,{}) if cod_prod else {}
     rawDiario.append({'base':base,'data':ds,'linha':nome,'brl':round(vl,2),'hl':round(vol,4),
