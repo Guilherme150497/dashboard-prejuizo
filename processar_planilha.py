@@ -523,16 +523,21 @@ print("   Salvo em dados_dashboard.json")
 # Enviar para Supabase
 print("\n☁️  Enviando para a nuvem...")
 try:
-    import requests
+    import requests, gzip
+    body = json.dumps({'payload': payload}, ensure_ascii=False).encode('utf-8')
+    body_gz = gzip.compress(body)
+    print(f"   Tamanho comprimido: {len(body_gz)/1024/1024:.1f} MB")
     res = requests.patch(
         f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
         headers={
             'Content-Type': 'application/json',
+            'Content-Encoding': 'gzip',
             'apikey': SUPABASE_KEY,
             'Authorization': f'Bearer {SUPABASE_KEY}',
             'Prefer': 'return=minimal'
         },
-        json={'payload': payload}
+        data=body_gz,
+        timeout=120
     )
     if res.status_code in [200,204]:
         print("✅ Dados enviados com sucesso!")
