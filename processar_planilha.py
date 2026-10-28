@@ -536,45 +536,45 @@ try:
         'Prefer': 'return=minimal'
     }
 
-    payload_main = {
+    import datetime
+
+    def enviar(campo, valor, label):
+        kb = len(json.dumps(valor, ensure_ascii=False)) / 1024
+        print(f"   Enviando {label} ({kb:.0f} KB)...")
+        r = requests.patch(
+            f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
+            headers=HEADERS,
+            json={campo: valor},
+            timeout=120
+        )
+        if r.status_code in [200, 204]:
+            print(f"   ✅ {label} ok")
+        else:
+            print(f"   ❌ {label} falhou: {r.status_code} - {r.text[:150]}")
+            raise RuntimeError(f"Falha em {label}")
+
+    # Parte 1 — dados mensais agregados + metas (leve)
+    enviar('payload', {
         'data': fk(data), 'metas': fk(metas), 'taxasRHL': taxas_rhl,
         'vol': fk(vol_real), 'volPuxado': fk(vol_puxado), 'volEntregue': volEntregue,
         'wqiMensal': wqiMensal, 'wqiMeta': wqiMeta
-    }
-    payload_raw = {
-        'rawProd': rawProd, 'rawDiario': rawDiario, 'wqiDiario': wqiDiario
-    }
+    }, 'Mensal+Metas')
 
-    kb1 = len(json.dumps(payload_main, ensure_ascii=False)) / 1024
-    kb2 = len(json.dumps(payload_raw,  ensure_ascii=False)) / 1024
-    print(f"   Parte 1 (mensal+metas): {kb1:.0f} KB")
-    print(f"   Parte 2 (raw+diário):   {kb2:.0f} KB")
+    # Parte 2 — rawProd
+    enviar('payload_raw', {'rawProd': rawProd, 'wqiDiario': wqiDiario}, 'rawProd+wqiDiario')
 
-    # Parte 1
-    r1 = requests.patch(
+    # Parte 3 e 4 — rawDiario dividido em 2 chunks de ~3000 KB cada
+    meio = len(rawDiario) // 2
+    enviar('payload_diario_a', rawDiario[:meio], f'rawDiario A [{meio} reg]')
+    enviar('payload_diario_b', rawDiario[meio:], f'rawDiario B [{len(rawDiario)-meio} reg]')
+
+    # Marca updated_at
+    requests.patch(
         f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
         headers=HEADERS,
-        json={'payload': payload_main, 'updated_at': None},
-        timeout=120
+        json={'updated_at': datetime.datetime.utcnow().isoformat()},
+        timeout=30
     )
-    if r1.status_code in [200, 204]:
-        print("   ✅ Parte 1 enviada com sucesso")
-    else:
-        print(f"   ❌ Parte 1 falhou: {r1.status_code} - {r1.text[:200]}")
-        raise RuntimeError("Falha na parte 1")
-
-    # Parte 2
-    r2 = requests.patch(
-        f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
-        headers=HEADERS,
-        json={'payload_raw': payload_raw, 'updated_at': __import__('datetime').datetime.utcnow().isoformat()},
-        timeout=120
-    )
-    if r2.status_code in [200, 204]:
-        print("   ✅ Parte 2 enviada com sucesso")
-    else:
-        print(f"   ❌ Parte 2 falhou: {r2.status_code} - {r2.text[:200]}")
-        raise RuntimeError("Falha na parte 2")
 
     print("\n✅ Dados enviados com sucesso!")
     print("   Todos os usuários verão os dados atualizados ao abrir o dashboard.")
