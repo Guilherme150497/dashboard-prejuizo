@@ -522,31 +522,68 @@ with open('dados_dashboard.json','w',encoding='utf-8') as f:
     f.write(json_str)
 print("   Salvo em dados_dashboard.json")
 
-# Enviar para Supabase
-print("\n☁️  Enviando para a nuvem...")
+# Enviar para Supabase em 2 chamadas para evitar timeout
+# Chamada 1: payload principal (dados agregados, metas, volumes) — pequeno
+# Chamada 2: payload_raw (rawProd + rawDiario + wqiDiario) — grande mas separado
+print("\n☁️  Enviando para a nuvem (2 partes)...")
 try:
     import requests
-    res = requests.patch(
+
+    HEADERS = {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': f'Bearer {SUPABASE_KEY}',
+        'Prefer': 'return=minimal'
+    }
+
+    payload_main = {
+        'data': fk(data), 'metas': fk(metas), 'taxasRHL': taxas_rhl,
+        'vol': fk(vol_real), 'volPuxado': fk(vol_puxado), 'volEntregue': volEntregue,
+        'wqiMensal': wqiMensal, 'wqiMeta': wqiMeta
+    }
+    payload_raw = {
+        'rawProd': rawProd, 'rawDiario': rawDiario, 'wqiDiario': wqiDiario
+    }
+
+    kb1 = len(json.dumps(payload_main, ensure_ascii=False)) / 1024
+    kb2 = len(json.dumps(payload_raw,  ensure_ascii=False)) / 1024
+    print(f"   Parte 1 (mensal+metas): {kb1:.0f} KB")
+    print(f"   Parte 2 (raw+diário):   {kb2:.0f} KB")
+
+    # Parte 1
+    r1 = requests.patch(
         f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
-        headers={
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_KEY,
-            'Authorization': f'Bearer {SUPABASE_KEY}',
-            'Prefer': 'return=minimal'
-        },
-        json={'payload': payload},
+        headers=HEADERS,
+        json={'payload': payload_main, 'updated_at': None},
         timeout=120
     )
-    if res.status_code in [200,204]:
-        print("✅ Dados enviados com sucesso!")
-        print("   Todos os usuários verão os dados atualizados ao abrir o dashboard.")
+    if r1.status_code in [200, 204]:
+        print("   ✅ Parte 1 enviada com sucesso")
     else:
-        print(f"❌ Erro ao enviar: {res.status_code} - {res.text[:200]}")
+        print(f"   ❌ Parte 1 falhou: {r1.status_code} - {r1.text[:200]}")
+        raise RuntimeError("Falha na parte 1")
+
+    # Parte 2
+    r2 = requests.patch(
+        f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
+        headers=HEADERS,
+        json={'payload_raw': payload_raw, 'updated_at': __import__('datetime').datetime.utcnow().isoformat()},
+        timeout=120
+    )
+    if r2.status_code in [200, 204]:
+        print("   ✅ Parte 2 enviada com sucesso")
+    else:
+        print(f"   ❌ Parte 2 falhou: {r2.status_code} - {r2.text[:200]}")
+        raise RuntimeError("Falha na parte 2")
+
+    print("\n✅ Dados enviados com sucesso!")
+    print("   Todos os usuários verão os dados atualizados ao abrir o dashboard.")
+
 except ImportError:
     print("⚠️  Instale requests: pip install requests")
     print("   Os dados foram salvos em dados_dashboard.json")
 except Exception as e:
-    print(f"❌ Erro de conexão: {e}")
+    print(f"❌ Erro: {e}")
     print("   Os dados foram salvos em dados_dashboard.json")
 
 print("\n✅ Processamento concluído!")
