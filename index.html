@@ -995,30 +995,6 @@ function parse0317(wb) {
   }
 }
 
-function parse032801(wb) {
-  const sn = wb.SheetNames.find(n => n.replace(/\./g,'').replace(/\s/g,'').includes('030528'));
-  if (!sn) return console.warn('Aba 03.05.28.01 não encontrada');
-  const sheet = wb.Sheets[sn];
-  const rowsNum = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:true});
-  const rowsFmt = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:false});
-
-  for (let i = 1; i < rowsNum.length; i++) {
-    const r  = rowsNum[i];
-    const rF = rowsFmt[i] || [];
-    if (String(r[2]||'').trim() !== 'Total Gerente') continue;
-    const base = normBase(r[0]);
-    if (!base) continue;
-    const dt = parseDate(rF[1]) || parseDate(r[1]);
-    if (!dt) continue;
-    const ano = dt.getFullYear(), mes = dt.getMonth() + 1;
-    if (ano < 2020 || ano > 2030 || mes < 1 || mes > 12) continue;
-    const vRep   = flt(r[4]);
-    const vTroca = flt(r[3])+flt(r[5])+flt(r[6])+flt(r[7])+flt(r[8])+flt(r[9])+flt(r[10]);
-    if (vRep)   addD('Reposição Entrega',  base, ano, mes, vRep, 0);
-    if (vTroca) addD('Trocas Mercado (RN)',base, ano, mes, vTroca, 0);
-  }
-}
-
 // Dept/section headers to skip
 const META_SKIP = new Set(['entrega','armazém','armazem','puxada','volume planejado','cobeb lp','cobeb pm','rdc abaeté','rdc abaete','meta ','total']);
 
@@ -1220,9 +1196,11 @@ function parse0317diaria(wb) {
 
 function parse032801(wb) {
   // A partir de Set/2026, Reposição Entrega e Trocas são lidos da aba 03.18.05 (parse031805)
-  // Para evitar dupla contagem, ignorar dados >= Set/2026 nesta função
+  // ou 03.02.37 — para evitar dupla contagem, ignorar dados cobertos por essas abas
   const NOVA_ANO=2026, NOVA_MES=9;
-  const isNovaPeriodo = (ano,mes) => ano > NOVA_ANO || (ano===NOVA_ANO && mes >= NOVA_MES);
+  const isCoberto = (ano,mes) =>
+    MESES_0237[`${ano}-${mes}`] || // coberto por 03.02.37
+    (ano > NOVA_ANO || (ano===NOVA_ANO && mes >= NOVA_MES)); // coberto por 03.18.05
 
   // Mensal
   const sn = wb.SheetNames.find(n => n==='03.05.28.01');
@@ -1234,7 +1212,7 @@ function parse032801(wb) {
       const dt   = parseDate(row[1]);
       if (!base || !dt) return;
       const mes = dt.getMonth()+1, ano = dt.getFullYear();
-      if (isNovaPeriodo(ano, mes)) return; // coberto por parse031805
+      if (isCoberto(ano, mes)) return;
       const vR = typeof row[4]==='number' ? row[4] : 0;
       const vT = [3,5,6,7,8,9,10].reduce((s,i)=>s+(typeof row[i]==='number'?row[i]:0),0);
       if (vR) addData('Reposição Entrega',   base, ano, mes, vR);
@@ -1251,7 +1229,7 @@ function parse032801(wb) {
       const dt   = parseDate(row[1]);
       if (!base || !dt) return;
       const mes = dt.getMonth()+1, ano = dt.getFullYear();
-      if (isNovaPeriodo(ano, mes)) return; // coberto por parse031805
+      if (isCoberto(ano, mes)) return;
       const dataStr = `${ano}-${String(mes).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
       const vR = typeof row[4]==='number' ? row[4] : 0;
       const vT = [3,5,6,7,8,9,10].reduce((s,i)=>s+(typeof row[i]==='number'?row[i]:0),0);
@@ -1378,7 +1356,7 @@ function parseVol(wb) {
 }
 
 function parseLookup(wb) {
-  // 01.11: A(0)=cod, E(4)=marca, G(6)=embal
+  // 01.11: A(0)=cod, E(4)=marca, G(6)=embal, O(14)=FatorHecto
   S.lookup = {};
   const sn = wb.SheetNames.find(n => n==='01.11');
   if (!sn) return;
@@ -1388,13 +1366,15 @@ function parseLookup(wb) {
     if (!cod) return;
     const marca = String(row[4]||'').replace(/^\d{3}\s*-\s*/,'').trim();
     const embal = String(row[6]||'').replace(/^\d{3}\s*-\s*/,'').trim();
-    S.lookup[cod] = {marca:marca||'Não Identificado', embal:embal||'Não Identificado'};
+    const fatorHL = typeof row[14]==='number' ? row[14] : parseFloat(row[14])||0;
+    S.lookup[cod] = {marca:marca||'Não Identificado', embal:embal||'Não Identificado', fatorHL};
   });
   console.log(`Lookup: ${Object.keys(S.lookup).length} produtos`);
 }
 
 function parse031805(wb) {
   // 03.18.05 — Reposição Entrega e Trocas Mercado (RN) a partir de Set/2026
+  // Pula meses já cobertos pela nova aba 03.02.37
   const NOVA_ANO=2026, NOVA_MES=9;
   const sn = wb.SheetNames.find(n => n==='03.18.05');
   if (!sn) return;
@@ -1403,48 +1383,108 @@ function parse031805(wb) {
   rows.slice(1).forEach(row => {
     const base = normBase(row[0]);
     if (!base) return;
-    const dt = parseDate(row[7]); // Col H = data
+    const dt = parseDate(row[8]); // Col I = Data Solicitação (índice 8)
     if (!dt) return;
     const ano=dt.getFullYear(), mes=dt.getMonth()+1;
     if (ano < NOVA_ANO || (ano===NOVA_ANO && mes < NOVA_MES)) return;
-    const justif = String(row[23]||'').trim(); // Col X = Justificativa
+    // Pula meses já cobertos por 03.02.37
+    if (MESES_0237[`${ano}-${mes}`]) return;
+    const justif = String(row[24]||'').trim(); // Col Y = Justificativa (idx 24)
     if (justif.includes('Falta de Produto')) return;
-    const sistema = String(row[63]||'').trim(); // Col BL = Sistema Origem
+    const sistema = String(row[64]||'').trim(); // Col BM = Sistema Origem (idx 64)
     let linha;
     if (sistema==='Promax') linha='Reposição Entrega';
     else if (sistema==='Force'||sistema==='Customer') linha='Trocas Mercado (RN)';
     else return;
-    const vl = typeof row[21]==='number' ? row[21] : parseFloat(row[21])||0; // Col V = Valor (não Valor Unitário)
+    const vl = typeof row[21]==='number' ? row[21] : parseFloat(row[21])||0; // Col V = Valor (idx 21)
     if (vl<=0) return;
     addData(linha, base, ano, mes, vl);
-    const prod = String(row[27]||'').trim(); // Col AB = Descrição produto
-    const motorista = String(row[35]||'').trim(); // Col AJ = Nome Motorista
+    const prod = String(row[17]||'').trim(); // Col R = Descrição Produto (idx 17)
+    const motorista = String(row[36]||'').trim(); // Col AK = Nome Motorista (idx 36)
+    const setor = String(row[70]||'').trim(); // Col BS = Setor Venda (idx 70)
     if (prod) {
-      const codProd = typeof row[26]==='number' ? Math.round(row[26]) : 0; // Col AA = código produto
+      const codProd = typeof row[16]==='number' ? Math.round(row[16]) : 0; // Col Q = Código Produto (idx 16)
       const info = S.lookup[codProd]||{};
       S.rawProd.push({base, ano, mes, linha, prod,
         brl:Math.round(vl*100)/100, hl:0,
         marca:info.marca||'', embal:info.embal||'',
-        motorista});
+        motorista, setor});
     }
     // Diário
     const d=dt.getDate();
     const dataStr=`${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     S.rawDiario.push({base, data:dataStr, linha,
       brl:Math.round(vl*100)/100, hl:0,
-      prod, marca:'', embal:'', wqi:false, op:0, motorista});
+      prod, marca:'', embal:'', wqi:false, op:0, motorista, setor});
     n++;
   });
   console.log(`03.18.05: ${n} linhas (Set/2026+)`);
 }
 
+// Meses cobertos por 03.02.37 (substitui 03.18.05 para Reposição/Trocas)
+// Set: {ano_mes: true} — preenchido por parse030237
+const MESES_0237 = {};
+
+function parse030237(wb) {
+  // 03.02.37 — Reposição Entrega (Promax) e Trocas Mercado (RN) (Force)
+  // Col A(0)=Sistema, B(1)=Motorista, C(2)=Setor, D(3)=Base, J(9)=Data,
+  // T(19)=CodProd, U(20)=Unidade, V(21)=Descrição, X(23)=Qtde, AD(29)=Valor
+  const sn = wb.SheetNames.find(n => n==='03.02.37');
+  if (!sn) return;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null, raw:true});
+  let n=0;
+  rows.slice(1).forEach(row => {
+    const sistema = String(row[0]||'').trim();
+    let linha;
+    if (sistema==='Promax') linha='Reposição Entrega';
+    else if (sistema==='Force') linha='Trocas Mercado (RN)';
+    else return;
+    const base = normBase(row[3]);
+    if (!base) return;
+    const dt = parseDate(row[9]);
+    if (!dt) return;
+    const ano=dt.getFullYear(), mes=dt.getMonth()+1;
+    const vl = typeof row[29]==='number' ? row[29] : parseFloat(row[29])||0;
+    if (vl<=0) return;
+    // Registra o mês como coberto por 03.02.37
+    MESES_0237[`${ano}-${mes}`] = true;
+    addData(linha, base, ano, mes, vl);
+    // Produto
+    const codProd = typeof row[19]==='number' ? Math.round(row[19]) : 0;
+    const prod = String(row[21]||'').trim();
+    const motorista = String(row[1]||'').trim();
+    const setor = String(row[2]||'').trim();
+    const qtde = typeof row[23]==='number' ? row[23] : parseFloat(row[23])||0;
+    // HL: qtde × fatorHL do lookup (por unidade "Un" fatorHL já é por unidade)
+    const info = S.lookup[codProd]||{};
+    const hl = (qtde > 0 && info.fatorHL > 0) ? Math.round(qtde * info.fatorHL * 10000)/10000 : 0;
+    if (prod) {
+      S.rawProd.push({base, ano, mes, linha, prod,
+        brl:Math.round(vl*100)/100, hl,
+        marca:info.marca||'', embal:info.embal||'',
+        motorista, setor});
+    }
+    // Diário
+    const d=dt.getDate();
+    const dataStr=`${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    S.rawDiario.push({base, data:dataStr, linha,
+      brl:Math.round(vl*100)/100, hl,
+      prod, marca:'', embal:'', wqi:false, op:0, motorista, setor});
+    n++;
+  });
+  console.log(`03.02.37: ${n} linhas`);
+}
+
 function parseAll(wb) {
   S.data={}; S.metas={}; S.vol={}; S.volPuxado={}; S.rawProd=[]; S.rawDiario=[]; S.wqiMeta={}; S.wqiMensal={}; S.wqiDiario={}; S.lookup={};
+  // Limpa meses cobertos pela nova aba
+  Object.keys(MESES_0237).forEach(k=>delete MESES_0237[k]);
   parseLookup(wb);
+  parse030237(wb); // Nova aba — processa primeiro para registrar MESES_0237
   parse0317mensal(wb);
   parse0317diaria(wb);
   parse032801(wb);
-  parse031805(wb);
+  parse031805(wb); // Complementa meses não cobertos por 03.02.37
   parseMetas(wb);
   parseVol(wb);
   parseVolPuxado(wb);
