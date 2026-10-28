@@ -116,8 +116,8 @@ for row in wb['03.05.17'].iter_rows(min_row=2,values_only=True):
         if cod in WQI_CODES: wqiMetaAcc[base]['hl_perd']+=hl
         if op in [1,2]: wqiMetaAcc[base]['hl_vend']+=hl
 
-    # op=107 → sempre Diferença de AG (prioridade sobre COD_MAP para evitar conflito de código)
-    nome=('Diferença de AG' if op==107 else COD_MAP.get(cod))
+    # Prioridade: cod define a linha de prejuízo; op=107 só identifica Diferença de AG quando cod não está no mapa
+    nome=COD_MAP.get(cod) or ('Diferença de AG' if op==107 else None)
     if not nome: continue
     add(data,nome,base,dt.year,dt.month,vl,hl)
     if prod and vl:
