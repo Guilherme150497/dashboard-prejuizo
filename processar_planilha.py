@@ -170,8 +170,7 @@ if '03.02.37' in wb.sheetnames:
             'base': base, 'data': ds, 'linha': linha,
             'brl': round(vl, 2), 'hl': hl,
             'prod': prod, 'marca': '', 'embal': '',
-            'wqi': False, 'op': 0,
-            'motorista': motorista, 'setor': setor
+            'wqi': False, 'op': 0
         })
         n_0237 += 1
     print(f"   ✓ {n_0237} registros | meses cobertos: {sorted(MESES_0237)}")
@@ -515,6 +514,9 @@ print(f"   WQI Meta: {wqiMeta}")
 # Salvar JSON local
 json_str = json.dumps(payload, ensure_ascii=False)
 print(f"\n💾 Tamanho dos dados: {len(json_str)/1024/1024:.1f} MB")
+for k in ['data','metas','taxasRHL','vol','volPuxado','volEntregue','rawProd','rawDiario','wqiMensal','wqiDiario','wqiMeta']:
+    s = len(json.dumps(payload.get(k,''), ensure_ascii=False))
+    print(f"   {k}: {s/1024:.0f} KB")
 
 with open('dados_dashboard.json','w',encoding='utf-8') as f:
     f.write(json_str)
@@ -523,20 +525,16 @@ print("   Salvo em dados_dashboard.json")
 # Enviar para Supabase
 print("\n☁️  Enviando para a nuvem...")
 try:
-    import requests, gzip
-    body = json.dumps({'payload': payload}, ensure_ascii=False).encode('utf-8')
-    body_gz = gzip.compress(body)
-    print(f"   Tamanho comprimido: {len(body_gz)/1024/1024:.1f} MB")
+    import requests
     res = requests.patch(
         f"{SUPABASE_URL}/rest/v1/dados_dashboard?id=eq.dados",
         headers={
             'Content-Type': 'application/json',
-            'Content-Encoding': 'gzip',
             'apikey': SUPABASE_KEY,
             'Authorization': f'Bearer {SUPABASE_KEY}',
             'Prefer': 'return=minimal'
         },
-        data=body_gz,
+        json={'payload': payload},
         timeout=120
     )
     if res.status_code in [200,204]:
