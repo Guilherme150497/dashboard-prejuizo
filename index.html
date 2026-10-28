@@ -728,8 +728,12 @@ tr:hover:not(.total-row) td{background:rgba(255,255,255,.02)}
     </div>
     <div class="kpi-row" id="kpi-mensal"></div>
     <div class="panel">
+      <div class="panel-head"><div><div class="pt">Prejuízo por Mês R$</div><div class="ps">Clique em um mês para ver as linhas de prejuízo</div></div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:260px"><canvas id="c-mensal-meses"></canvas></div></div>
+    </div>
+    <div class="panel">
       <div class="panel-head"><div><div class="pt">Prejuízo por Semana R$</div><div class="ps">Clique em uma semana para ver as linhas</div></div></div>
-      <div class="panel-body"><div class="chart-wrap" style="height:280px"><canvas id="c-mensal-semana"></canvas></div></div>
+      <div class="panel-body"><div class="chart-wrap" style="height:240px"><canvas id="c-mensal-semana"></canvas></div></div>
     </div>
     <div class="panel">
       <div class="panel-head"><div><div class="pt">R$/HL — Semanas do Mês</div><div class="ps">Prejuízo por hectolitro vendido — linha tracejada = meta mensal</div></div></div>
@@ -4164,6 +4168,74 @@ function renderMensal() {
     ${totAGMensal>0?`<div class="kpi" style="border-left:3px solid var(--purple);opacity:.75"><div class="kpi-label" style="color:var(--purple)">⚠️ Diferença de AG</div><div class="kpi-value" style="color:var(--purple);font-size:16px">${fmtBRL(totAGMensal)}</div><div class="kpi-sub">Não entra no total</div></div>`:''}
   `;
 
+  // ── Gráfico por MÊS (ano inteiro, clique abre drilldown) ──
+  const anoMensGraf = parseInt(mesSel.split('-')[0]);
+  const mesesGraf = Array.from({length:12},(_,i)=>i+1);
+  const totPorMes = mesesGraf.map(m=>{
+    const ym = `${anoMensGraf}-${String(m).padStart(2,'0')}`;
+    return S.rawDiario.filter(r=>
+      r.data.startsWith(ym) &&
+      (S.base==='ALL'||r.base===S.base) &&
+      (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
+      (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF) &&
+      (apenasAGMensal || NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG')
+    ).reduce((s,r)=>s+r.brl,0);
+  });
+  // Meta por mês (linha totMesGraf)
+  const metaPorMes = mesesGraf.map(m=>{
+    const baseNM = apenasAGMensal ? ALL_NOMES : NOMES_TOTAL;
+    return baseNM.filter(n=>
+      (linhaF_arr.includes('ALL')||linhaF_arr.includes(n)) &&
+      (deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF)
+    ).reduce((s,n)=>s+getMeta(n,S.base,anoMensGraf,m),0);
+  });
+  const mesSelecionado = parseInt(mesSel.split('-')[1]);
+  dchart('c-mensal-meses'); const ctxMeses=get('c-mensal-meses').getContext('2d');
+  CH['c-mensal-meses']=new Chart(ctxMeses,{
+    type:'bar',
+    data:{
+      labels:MESES,
+      datasets:[
+        {label:'R$ Realizado',data:totPorMes,
+          backgroundColor:totPorMes.map((v,i)=>{
+            const isSel=(i+1)===mesSelecionado;
+            const overMeta=metaPorMes[i]>0&&v>metaPorMes[i];
+            if(isSel) return overMeta?'rgba(248,81,73,1)':'rgba(34,197,94,1)';
+            return overMeta?'rgba(248,81,73,.65)':'rgba(45,126,247,.65)';
+          }),
+          borderRadius:4,borderSkipped:false,order:2},
+        {type:'line',label:'Meta Mensal',data:metaPorMes,
+          borderColor:'rgba(255,200,50,.9)',backgroundColor:'transparent',
+          borderWidth:2,borderDash:[6,4],pointRadius:3,pointBackgroundColor:'rgba(255,200,50,.9)',
+          tension:0,order:1}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(_,els)=>{
+        const bar=els.find(e=>e.datasetIndex===0);
+        if(bar==null) return;
+        const m=mesesGraf[bar.index];
+        const ym=`${anoMensGraf}-${String(m).padStart(2,'0')}`;
+        // seleciona o mês clicado e abre modal de linhas
+        if(get('sel-mensal-mes')) get('sel-mensal-mes').value=ym;
+        renderMensal();
+        openMensalModal(ym,'ALL');
+      },
+      onHover:(_,els)=>{get('c-mensal-meses').style.cursor=els.some(e=>e.datasetIndex===0)?'pointer':'default';},
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#5a6a88',font:{size:11},boxWidth:14,padding:12,
+          filter:item=>item.datasetIndex===1}},
+        tooltip:{mode:'index',intersect:false,callbacks:{
+          label:c=>c.datasetIndex===0?`Realizado: ${fmtBRL(c.raw)}`:`Meta: ${fmtBRL(c.raw)}`
+        },backgroundColor:'#1a2030',borderColor:'#1c2333',borderWidth:1,titleColor:'#e2e8f4',bodyColor:'#5a6a88'}
+      },
+      scales:{
+        x:{ticks:{color:(ctx)=>ctx.index+1===mesSelecionado?'#e2e8f4':'#5a6a88',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#5a6a88',font:{size:10},callback:v=>fmtBRL(v,true)},grid:{color:'rgba(48,54,61,.3)'}}
+      }
+    }
+  });
+
   // ── Gráfico por semana (barras) — AG excluída somente quando misturada com outros depts ──
   const semMap={}; rowsMes.filter(r=>linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)).filter(r=>deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF)
     .filter(r=>apenasAGMensal || NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG')
@@ -4183,6 +4255,7 @@ function renderMensal() {
         const s=semsAll[els[0].index];
         get('sel-mensal-semana').value=s;
         renderMensal();
+        openMensalModal(mesSel, String(s));
       },
       onHover:(_,els)=>{get('c-mensal-semana').style.cursor=els.length?'pointer':'default';},
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a2030',titleColor:'#e2e8f4',bodyColor:'#5a6a88',borderColor:'#1c2333',borderWidth:1,callbacks:{label:i=>`R$ ${fmtBRL(i.raw)}`}}},
