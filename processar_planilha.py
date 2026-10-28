@@ -143,7 +143,7 @@ if '03.02.37' in wb.sheetnames:
             continue
         base = nm(row[3])   # Col D = Base
         if not base: continue
-        dt = row[9]         # Col J = Data
+        dt = row[10]        # Col K = Data
         if not hasattr(dt,'month'): continue
         vl = sf(row[29])    # Col AD = Valor
         if vl <= 0: continue
