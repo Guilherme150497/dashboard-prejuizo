@@ -4153,18 +4153,39 @@ function renderMensal() {
   // filtra pela semana selecionada
   const rowsFilt = semanaSel==='ALL' ? rowsMes : rowsMes.filter(r=>semanaDoMes(r.data)===parseInt(semanaSel));
 
-  // ── KPIs — AG separada do total somente quando misturada com outros depts ──
+  // ── KPIs — usa getBRL (mesma fonte do Resumo por Dept) quando não há filtro de semana ──
   const apenasAGMensal = deptF==='Diferença de AG' ||
     (!linhaF_arr.includes('ALL') && linhaF_arr.length>0 &&
      linhaF_arr.every(n=>NOME_TO_DEF[n]?.dept==='Diferença de AG'));
-  const totBRL=apenasAGMensal ? rowsFilt.reduce((s,r)=>s+r.brl,0) : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.brl,0);
-  const totAGMensal=apenasAGMensal ? 0 : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept==='Diferença de AG').reduce((s,r)=>s+r.brl,0);
-  const totHL=apenasAGMensal ? rowsFilt.reduce((s,r)=>s+r.hl,0) : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.hl,0);
-  const deptMap={}; rowsFilt.forEach(r=>{ const d=NOME_TO_DEF[r.linha]?.dept||'?'; deptMap[d]=(deptMap[d]||0)+r.brl; });
+  const anoKPI=parseInt(mesSel.split('-')[0]), mesKPI=parseInt(mesSel.split('-')[1]);
+  const linhasKPI = ALL_NOMES.filter(n=>
+    (linhaF_arr.includes('ALL')||linhaF_arr.includes(n)) &&
+    (deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF)
+  );
+  // Quando sem filtro de semana: usa getBRL (agregado, igual ao Resumo por Dept)
+  // Quando com semana: usa rawDiario (único com granularidade de semana)
+  let totBRL, totAGMensal, totHL, deptMap={};
+  if(semanaSel==='ALL') {
+    // Fonte agregada — mesma do Resumo por Dept
+    totBRL=0; totAGMensal=0; totHL=0;
+    linhasKPI.forEach(n=>{
+      const v=getBRL(n,base,anoKPI,mesKPI);
+      const h=getHL(n,base,anoKPI,mesKPI)||0;
+      const d=NOME_TO_DEF[n]?.dept||'?';
+      if(d==='Diferença de AG'&&!apenasAGMensal){ totAGMensal+=v; }
+      else { totBRL+=v; totHL+=h; deptMap[d]=(deptMap[d]||0)+v; }
+    });
+  } else {
+    // Fonte rawDiario (semana filtrada)
+    totBRL=apenasAGMensal ? rowsFilt.reduce((s,r)=>s+r.brl,0) : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.brl,0);
+    totAGMensal=apenasAGMensal ? 0 : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept==='Diferença de AG').reduce((s,r)=>s+r.brl,0);
+    totHL=apenasAGMensal ? rowsFilt.reduce((s,r)=>s+r.hl,0) : rowsFilt.filter(r=>NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG').reduce((s,r)=>s+r.hl,0);
+    rowsFilt.forEach(r=>{ const d=NOME_TO_DEF[r.linha]?.dept||'?'; deptMap[d]=(deptMap[d]||0)+r.brl; });
+  }
   get('kpi-mensal').innerHTML=`
     <div class="kpi"><div class="kpi-label">Total R$ — ${semanaSel==='ALL'?mesSel:lblSemana(parseInt(semanaSel))}</div><div class="kpi-value">${fmtBRL(totBRL)}</div><div class="kpi-sub">${apenasAGMensal?'Diferença de AG':'sem Diferença de AG'}</div></div>
     <div class="kpi"><div class="kpi-label">Total HL</div><div class="kpi-value">${fmtHL(totHL)}</div></div>
-    ${Object.entries(deptMap).filter(([d])=>d!=='Diferença de AG').map(([d,v])=>`<div class="kpi" style="border-left:3px solid ${DEPT_C[d]||'#fff'}"><div class="kpi-label">${d}</div><div class="kpi-value" style="color:${DEPT_C[d]||'#fff'}">${fmtBRL(v)}</div></div>`).join('')}
+    ${Object.entries(deptMap).filter(([d])=>d!=='Diferença de AG'&&d!=='?').map(([d,v])=>`<div class="kpi" style="border-left:3px solid ${DEPT_C[d]||'#fff'}"><div class="kpi-label">${d}</div><div class="kpi-value" style="color:${DEPT_C[d]||'#fff'}">${fmtBRL(v)}</div></div>`).join('')}
     ${totAGMensal>0?`<div class="kpi" style="border-left:3px solid var(--purple);opacity:.75"><div class="kpi-label" style="color:var(--purple)">⚠️ Diferença de AG</div><div class="kpi-value" style="color:var(--purple);font-size:16px">${fmtBRL(totAGMensal)}</div><div class="kpi-sub">Não entra no total</div></div>`:''}
   `;
 
