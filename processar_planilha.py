@@ -46,8 +46,12 @@ WQI_CODES = {7002,6999,7004}
 ALL_LINHAS = list(set(CODES.values())) + ['Diferença de AG','Reposição Entrega','Trocas Mercado (RN)']
 
 # A partir de Set/2026 Reposição Entrega e Trocas Mercado (RN) saem de 03.18.05
+# A partir de quando 03.02.37 existir, ela substitui 03.18.05 para esses meses
 NOVA_FONTE_ANO  = 2026
 NOVA_FONTE_MES  = 9   # setembro
+
+# Meses cobertos pela aba 03.02.37 (preenchido durante leitura dessa aba)
+MESES_0237 = set()  # conjunto de (ano, mes)
 
 def nm(s):
     s=str(s).upper().strip()
@@ -83,12 +87,13 @@ for row in ws11.iter_rows(min_row=2,values_only=True):
     if not isinstance(cod,(int,float)): continue
     marca=re.sub(r'^\d{3}\s*-\s*','',str(row[4] or '').strip())
     embal=re.sub(r'^\d{3}\s*-\s*','',str(row[6] or '').strip())
-    lookup[int(cod)]={'marca':marca or 'Não Identificado','embal':embal or 'Não Identificado'}
+    fator_hl = float(row[14]) if isinstance(row[14],(int,float)) else 0.0  # Col O = Fator Hecto
+    lookup[int(cod)]={'marca':marca or 'Não Identificado','embal':embal or 'Não Identificado','fatorHL':fator_hl}
 print(f"   {len(lookup):,} produtos")
 
 # Mensal
 print("📊 Lendo 03.05.17 mensal...")
-data={}; rawProd=[]; wqiMensal={}; volEntregue={}
+data={}; rawProd=[]; rawDiario=[]; wqiMensal={}; volEntregue={}
 wqiMetaAcc=defaultdict(lambda:{'hl_perd':0.0,'hl_vend':0.0})
 n=0
 for row in wb['03.05.17'].iter_rows(min_row=2,values_only=True):
@@ -123,8 +128,59 @@ for row in wb['03.05.17'].iter_rows(min_row=2,values_only=True):
     if n%50000==0: print(f"   {n:,} linhas...")
 print(f"   ✓ {n:,} linhas processadas, {len(rawProd):,} produtos")
 
+# ── 03.02.37 — Reposição Entrega (Promax) e Trocas Mercado (RN) (Force) ──
+# Esta aba é a fonte mais recente; registra quais meses cobre em MESES_0237
+print("📊 Lendo 03.02.37 (Reposição Entrega / Trocas Mercado RN)...")
+n_0237=0
+if '03.02.37' in wb.sheetnames:
+    for row in wb['03.02.37'].iter_rows(min_row=2,values_only=True):
+        sistema = str(row[0] or '').strip()
+        if sistema == 'Promax':
+            linha = 'Reposição Entrega'
+        elif sistema == 'Force':
+            linha = 'Trocas Mercado (RN)'
+        else:
+            continue
+        base = nm(row[3])   # Col D = Base
+        if not base: continue
+        dt = row[9]         # Col J = Data
+        if not hasattr(dt,'month'): continue
+        vl = sf(row[29])    # Col AD = Valor
+        if vl <= 0: continue
+        MESES_0237.add((dt.year, dt.month))
+        add(data, linha, base, dt.year, dt.month, vl)
+        cod_prod = int(row[19]) if isinstance(row[19],(int,float)) else None
+        prod     = str(row[21] or '').strip()   # Col V = Descrição
+        motorista= str(row[1] or '').strip()    # Col B = Motorista
+        setor    = str(row[2] or '').strip()    # Col C = Setor
+        qtde     = sf(row[23])                  # Col X = Qtde
+        info     = lookup.get(cod_prod, {}) if cod_prod else {}
+        fator_hl = info.get('fatorHL', 0) if isinstance(info.get('fatorHL'), (int,float)) else 0
+        hl       = round(qtde * fator_hl, 4) if qtde > 0 and fator_hl > 0 else 0.0
+        if prod:
+            rawProd.append({
+                'base': base, 'ano': dt.year, 'mes': dt.month,
+                'linha': linha, 'prod': prod,
+                'brl': round(vl, 2), 'hl': hl,
+                'marca': info.get('marca',''), 'embal': info.get('embal',''),
+                'motorista': motorista, 'setor': setor
+            })
+        ds = dt.strftime('%Y-%m-%d')
+        rawDiario.append({
+            'base': base, 'data': ds, 'linha': linha,
+            'brl': round(vl, 2), 'hl': hl,
+            'prod': prod, 'marca': '', 'embal': '',
+            'wqi': False, 'op': 0,
+            'motorista': motorista, 'setor': setor
+        })
+        n_0237 += 1
+    print(f"   ✓ {n_0237} registros | meses cobertos: {sorted(MESES_0237)}")
+else:
+    print("   ⚠️  Aba 03.02.37 não encontrada — usando apenas 03.18.05")
+
 # ── 03.05.28.01 — Reposição Entrega e Trocas Mercado (RN) até Ago/2026 ──
 # A partir de Set/2026 essas linhas saem de 03.18.05 (ver abaixo)
+# Meses já cobertos por 03.02.37 são ignorados
 print("📊 Lendo 03.05.28.01 (até Ago/2026)...")
 n_rep=0
 for row in wb['03.05.28.01'].iter_rows(min_row=2,values_only=True):
@@ -134,6 +190,8 @@ for row in wb['03.05.28.01'].iter_rows(min_row=2,values_only=True):
     # Somente meses ANTES de Set/2026 — a partir de Set/2026 usa 03.18.05
     if dt.year > NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month >= NOVA_FONTE_MES: continue
+    # Pula meses já cobertos por 03.02.37
+    if (dt.year, dt.month) in MESES_0237: continue
     vR=sf(row[4]); vT=sum(sf(row[i]) for i in [3,5,6,7,8,9,10])
     if vR: add(data,'Reposição Entrega',base,dt.year,dt.month,vR); n_rep+=1
     if vT: add(data,'Trocas Mercado (RN)',base,dt.year,dt.month,vT); n_rep+=1
@@ -162,6 +220,9 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     # Somente SET/2026 em diante
     if dt.year < NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month < NOVA_FONTE_MES: continue
+
+    # Pula meses já cobertos por 03.02.37
+    if (dt.year, dt.month) in MESES_0237: continue
 
     # Col X (idx 23) — Justificativa: excluir se contiver "Falta de Produto"
     justificativa = str(row[23] or '').strip()
@@ -201,7 +262,7 @@ print(f"   ✓ {n_nova:,} linhas 03.18.05 processadas")
 
 # ── Diário — 03.05.17 ──
 print("📊 Lendo 03.05.17 diária...")
-rawDiario=[]; wqiDiario={}; n=0
+wqiDiario={}; n=0
 for row in wb['03.05.17 diária'].iter_rows(min_row=2,values_only=True):
     dt=row[1]; base=nm(row[0])
     if not hasattr(dt,'date') or not base: continue
@@ -234,6 +295,8 @@ for row in wb['03.05.28.01 diário'].iter_rows(min_row=2,values_only=True):
     # Somente meses ANTES de Set/2026
     if dt.year > NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month >= NOVA_FONTE_MES: continue
+    # Pula meses já cobertos por 03.02.37
+    if (dt.year, dt.month) in MESES_0237: continue
     ds=dt.strftime('%Y-%m-%d')
     vR=sf(row[4]); vT=sum(sf(row[i]) for i in [3,5,6,7,8,9,10])
     if vR:
@@ -257,6 +320,9 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     # Somente SET/2026 em diante
     if dt.year < NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month < NOVA_FONTE_MES: continue
+
+    # Pula meses já cobertos por 03.02.37
+    if (dt.year, dt.month) in MESES_0237: continue
 
     # Filtros
     if 'Falta de Produto' in str(row[23] or ''): continue
