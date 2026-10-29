@@ -221,8 +221,10 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     if dt.year < NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month < NOVA_FONTE_MES: continue
 
-    # Pula meses já cobertos por 03.02.37
-    if (dt.year, dt.month) in MESES_0237: continue
+    # A partir de Set/2026, Reposição e Trocas vêm SOMENTE da 03.02.37
+    # A 03.18.05 só é fonte válida até Ago/2026 para essas linhas
+    if dt.year > NOVA_FONTE_ANO or (dt.year == NOVA_FONTE_ANO and dt.month >= NOVA_FONTE_MES):
+        continue
 
     # Col X (idx 23) — Justificativa: excluir se contiver "Falta de Produto"
     justificativa = str(row[23] or '').strip()
@@ -321,8 +323,9 @@ for row in wb['03.18.05'].iter_rows(min_row=2,values_only=True):
     if dt.year < NOVA_FONTE_ANO: continue
     if dt.year == NOVA_FONTE_ANO and dt.month < NOVA_FONTE_MES: continue
 
-    # Pula meses já cobertos por 03.02.37
-    if (dt.year, dt.month) in MESES_0237: continue
+    # A partir de Set/2026, Reposição e Trocas vêm SOMENTE da 03.02.37
+    if dt.year > NOVA_FONTE_ANO or (dt.year == NOVA_FONTE_ANO and dt.month >= NOVA_FONTE_MES):
+        continue
 
     # Filtros
     if 'Falta de Produto' in str(row[23] or ''): continue
