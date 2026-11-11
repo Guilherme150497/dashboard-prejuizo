@@ -4195,14 +4195,14 @@ function renderMensal() {
   const anoMensGraf = parseInt(mesSel.split('-')[0]);
   const mesesGraf = Array.from({length:12},(_,i)=>i+1);
   const totPorMes = mesesGraf.map(m=>{
-    const ym = `${anoMensGraf}-${String(m).padStart(2,'0')}`;
-    return S.rawDiario.filter(r=>
-      r.data.startsWith(ym) &&
-      (S.base==='ALL'||r.base===S.base) &&
-      (linhaF_arr.includes('ALL')||linhaF_arr.includes(r.linha)) &&
-      (deptF==='ALL'||NOME_TO_DEF[r.linha]?.dept===deptF) &&
-      (apenasAGMensal || NOME_TO_DEF[r.linha]?.dept!=='Diferença de AG')
-    ).reduce((s,r)=>s+r.brl,0);
+    // Usa getBRL (mesma fonte do Resumo por Dept) — cobre meses sem rawDiario (ex: out/2026)
+    const baseNMs = apenasAGMensal
+      ? ALL_NOMES.filter(n=>NOME_TO_DEF[n]?.dept==='Diferença de AG')
+      : NOMES_TOTAL;
+    return baseNMs.filter(n=>
+      (linhaF_arr.includes('ALL')||linhaF_arr.includes(n)) &&
+      (deptF==='ALL'||NOME_TO_DEF[n]?.dept===deptF)
+    ).reduce((s,n)=>s+getBRL(n,S.base,anoMensGraf,m),0);
   });
   // Meta por mês (linha totMesGraf)
   const metaPorMes = mesesGraf.map(m=>{
