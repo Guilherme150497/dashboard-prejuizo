@@ -822,7 +822,6 @@ const LINHAS_DEF = [
   {key:'108_7004', nome:'Acidente Armazém',                 dept:'Armazém', op:108, cod:7004},
   {key:'108_6999', nome:'Amassados Armazém',                dept:'Armazém', op:108, cod:6999},
   {key:'108_7003', nome:'Shelf Armazém',                    dept:'Armazém', op:108, cod:7003},
-  {key:'108_7010', nome:'Shelf Armazém',                    dept:'Armazém', op:108, cod:7010},
   {key:'108_7011', nome:'Diferença de PA (Inventário)',     dept:'Armazém', op:108, cod:7011},
   // Erro de Programação — departamento próprio, não entra no Total Geral
   {key:'108_9100', nome:'Erro de Programação',              dept:'Erro de Programação', op:108, cod:9100},
@@ -845,10 +844,12 @@ LINHAS_DEF.forEach(d => KEY_TO_NOME[d.key] = d.nome);
 // op108 lookup: cod → nome
 const COD108 = {};
 LINHAS_DEF.filter(d=>d.op===108).forEach(d => COD108[d.cod] = d.nome);
+COD108[7010] = 'Shelf Armazém'; // 7010 soma junto com 7003 na mesma linha
 
 // CODES_MAP: cod -> nome (used by parsers — no op filter needed)
 const CODES_MAP = {};
 LINHAS_DEF.filter(d=>d.op===108).forEach(d => CODES_MAP[d.cod] = d.nome);
+CODES_MAP[7010] = 'Shelf Armazém'; // 7010 soma junto com 7003 na mesma linha
 
 const DEPTS = ['Entrega','Armazém','Puxada'];
 const DEPTS_ALL = ['Entrega','Armazém','Puxada','Erro de Programação','Diferença de AG'];
