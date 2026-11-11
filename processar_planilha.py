@@ -35,7 +35,7 @@ CODES = {
     (108,7000):'Quebra Entrega (Retorno de Rota)',(108,7008):'Acidente',
     (108,7015):'Refugo',(108,7013):'Assalto BO',(108,6996):'AmassadosEntr',
     (108,7002):'Quebra Armazém - Avaria',(108,7004):'Acidente Armazém',
-    (108,6999):'Amassados Armazém',(108,7003):'Shelf Armazém',
+    (108,6999):'Amassados Armazém',(108,7003):'Shelf Armazém',(108,7010):'Shelf Armazém',
     (108,7011):'Diferença de PA (Inventário)',(108,9100):'Erro de Programação',
     (108,7019):'Refugo Puxada',(108,7006):'Acidente Puxada',
     (108,7001):'Avarias no Recebimento (Puxada)',
